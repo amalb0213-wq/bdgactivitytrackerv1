@@ -337,13 +337,57 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
 
 <!-- PAGE 2: LAST 5 WORKING DAYS -->
 <div id="page-recent" class="page">
-  <div class="row-between">
-    <div class="row-left"><h2>Last 5 working days</h2><span id="recent-range" style="font-size:12px;color:var(--tx3);"></span></div>
+  <div class="row-between" style="margin-bottom:1rem;">
+    <div class="row-left"><h2>Work summary</h2><span id="recent-range" style="font-size:12px;color:var(--tx3);"></span></div>
     <button class="btn btn-sm" onclick="exportCSV('recent')">Export CSV</button>
   </div>
-  <div class="week-tabs" id="week-tabs"></div>
+
+  <!-- Month + Week selector -->
+  <div class="filter-card" style="margin-bottom:1rem;">
+    <div class="filter-bar">
+      <span style="font-size:12px;font-weight:500;color:var(--tx2);">Month:</span>
+      <select id="rec-month" onchange="onRecMonthChange()" style="height:32px;font-size:12px;"></select>
+      <span style="font-size:12px;font-weight:500;color:var(--tx2);">Week:</span>
+      <div id="rec-week-btns" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+  </div>
+
+  <!-- KPI stats -->
   <div class="stat-grid" id="recent-stat-row"></div>
+
+  <!-- Charts row -->
+  <div class="cg" style="margin-bottom:14px;">
+    <div class="cc">
+      <div class="ct">Tasks completed</div>
+      <div class="cs">Total tasks done vs in progress vs blocked</div>
+      <div class="cw" style="height:220px;"><canvas id="rec-ch-status"></canvas></div>
+      <div class="lr" id="rec-leg-status"></div>
+    </div>
+    <div class="cc">
+      <div class="ct">Tasks by category</div>
+      <div class="cs">Breakdown by work category this period</div>
+      <div class="cw" style="height:220px;"><canvas id="rec-ch-category"></canvas></div>
+    </div>
+    <div class="cc fw">
+      <div class="ct">Daily task count</div>
+      <div class="cs">Number of tasks logged per working day</div>
+      <div class="cw" style="height:180px;"><canvas id="rec-ch-daily"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Member workload -->
+  <div class="cc" style="margin-bottom:14px;">
+    <div class="ct" style="margin-bottom:4px;">Member workload this period</div>
+    <div class="cs">Task count and estimated days per team member</div>
+    <div id="rec-member-bars" style="display:flex;flex-direction:column;gap:10px;margin-top:4px;"></div>
+  </div>
+
+  <!-- Task table -->
   <div class="table-card">
+    <div style="padding:12px 16px;border-bottom:0.5px solid var(--bl);display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:13px;font-weight:600;">Task details</span>
+      <span id="rec-task-count" style="font-size:12px;color:var(--tx3);"></span>
+    </div>
     <div class="table-wrap"><table class="recent-tbl" id="recent-table"></table></div>
   </div>
 </div>
@@ -944,42 +988,210 @@ async function delTask(id){
 /* ═══════════════════════════════════════
    RECENT PAGE
 ═══════════════════════════════════════ */
+/* ─── RECENT PAGE STATE ─── */
+let recSelMonth=''; // 'YYYY-MM'
+let recSelWeek=0;   // 0=full month, 1-4=week number
+
+function getMonthOptions(){
+  // Build list of months from tasks + last 6 months
+  const months=new Set();
+  tasks.forEach(t=>{if(t.date)months.add(t.date.slice(0,7));});
+  const now=new Date();
+  for(let i=0;i<6;i++){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    months.add(d.toISOString().slice(0,7));
+  }
+  return [...months].sort().reverse();
+}
+
+function getWeeksOfMonth(ym){
+  // Returns array of {label, start, end} for Mon-Fri weeks in a given YYYY-MM
+  const [y,m]=ym.split('-').map(Number);
+  const weeks=[];
+  let d=new Date(y,m-1,1);
+  // find first Monday
+  while(d.getDay()!==1)d.setDate(d.getDate()+1);
+  let wNum=1;
+  while(d.getMonth()===m-1){
+    const wStart=new Date(d);
+    const wEnd=new Date(d);wEnd.setDate(d.getDate()+4);
+    // clamp end to last day of month
+    const lastDay=new Date(y,m,0);
+    const clampedEnd=wEnd>lastDay?lastDay:wEnd;
+    weeks.push({
+      label:'Week '+wNum,
+      start:wStart.toISOString().split('T')[0],
+      end:clampedEnd.toISOString().split('T')[0],
+      num:wNum
+    });
+    d.setDate(d.getDate()+7);
+    wNum++;
+  }
+  return weeks;
+}
+
+function onRecMonthChange(){
+  recSelMonth=document.getElementById('rec-month').value;
+  recSelWeek=0;
+  renderRecent();
+}
+
+function onRecWeekSelect(num){
+  recSelWeek=num;
+  renderRecent();
+}
+
+function initRecMonth(){
+  const months=getMonthOptions();
+  const sel=document.getElementById('rec-month');
+  if(!recSelMonth)recSelMonth=months[0]||new Date().toISOString().slice(0,7);
+  sel.innerHTML=months.map(m=>{
+    const [y,mo]=m.split('-');
+    const label=new Date(+y,+mo-1,1).toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+    return`<option value="${m}"${m===recSelMonth?' selected':''}>${label}</option>`;
+  }).join('');
+}
+
 function renderRecent(){
-  const wins=weekWindows();
-  document.getElementById('week-tabs').innerHTML=wins.map((w,i)=>`<button class="wt${i===selWeek?' active':''}" onclick="selW(${i})">${w.label} (${w.start} – ${w.end})</button>`).join('');
-  const win=wins[selWeek];
-  document.getElementById('recent-range').textContent=`${win.start} → ${win.end}`;
-  const r=tasks.filter(t=>t.date>=win.start&&t.date<=win.end).sort((a,b)=>a.date<b.date?-1:1);
-  const rd=r.filter(t=>t.status==='Done').length,ri=r.filter(t=>t.status==='In progress').length,rb=r.filter(t=>t.status==='Blocked').length;
+  if(!currentUser)return;
+  initRecMonth();
+
+  const weeks=getWeeksOfMonth(recSelMonth);
+  // Build week buttons
+  const btnContainer=document.getElementById('rec-week-btns');
+  btnContainer.innerHTML=
+    `<button class="wt${recSelWeek===0?' active':''}" onclick="onRecWeekSelect(0)">Full month</button>`+
+    weeks.map(w=>`<button class="wt${recSelWeek===w.num?' active':''}" onclick="onRecWeekSelect(${w.num})">${w.label}<span style="font-size:10px;color:inherit;opacity:.7;margin-left:4px;">${w.start.slice(5)} – ${w.end.slice(5)}</span></button>`).join('');
+
+  // Determine date range
+  let start,end;
+  if(recSelWeek===0){
+    const [y,mo]=recSelMonth.split('-').map(Number);
+    start=recSelMonth+'-01';
+    end=new Date(y,mo,0).toISOString().split('T')[0];
+  } else {
+    const w=weeks.find(w=>w.num===recSelWeek);
+    if(!w)return;
+    start=w.start;end=w.end;
+  }
+
+  const [y,mo]=recSelMonth.split('-');
+  const mLabel=new Date(+y,+mo-1,1).toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  const weekLabel=recSelWeek===0?'Full month':'Week '+recSelWeek;
+  document.getElementById('recent-range').textContent=`${mLabel} · ${weekLabel} · ${start} → ${end}`;
+
+  const r=tasks.filter(t=>t.date&&t.date>=start&&t.date<=end).sort((a,b)=>a.date<b.date?-1:1);
+  const rd=r.filter(t=>t.status==='Done').length;
+  const ri=r.filter(t=>t.status==='In progress').length;
+  const rb=r.filter(t=>t.status==='Blocked').length;
+  const rh=r.filter(t=>t.status==='High'||t.priority==='High').length;
+
+  // KPIs
   document.getElementById('recent-stat-row').innerHTML=`
-    <div class="stat"><div class="stat-label">Tasks this window</div><div class="stat-value">${r.length}</div><div class="stat-sub">${win.start} – ${win.end}</div></div>
-    <div class="stat"><div class="stat-label">Done</div><div class="stat-value">${rd}</div><div class="stat-sub">${r.length?Math.round(rd/r.length*100):0}%</div></div>
-    <div class="stat"><div class="stat-label">In progress</div><div class="stat-value">${ri}</div><div class="stat-sub">&nbsp;</div></div>
-    <div class="stat"><div class="stat-label">Blocked</div><div class="stat-value">${rb}</div><div class="stat-sub">&nbsp;</div></div>`;
+    <div class="stat"><div class="stat-label">Total tasks</div><div class="stat-value">${r.length}</div><div class="stat-sub">${start} – ${end}</div></div>
+    <div class="stat"><div class="stat-label">Completed</div><div class="stat-value">${rd}</div><div class="stat-sub">${r.length?Math.round(rd/r.length*100):0}% done</div></div>
+    <div class="stat"><div class="stat-label">In progress</div><div class="stat-value">${ri}</div><div class="stat-sub">${rb} blocked</div></div>
+    <div class="stat"><div class="stat-label">High priority</div><div class="stat-value">${r.filter(t=>t.priority==='High').length}</div><div class="stat-sub">need attention</div></div>`;
+
+  const tx=isDark()?'#a0a09a':'#6b6b67';
+  const gc=isDark()?'rgba(255,255,255,.08)':'rgba(0,0,0,.07)';
+
+  // Chart 1: Status donut
+  const sL=['Done','In progress','Review','To do','Blocked'],sC=['#1D9E75','#185FA5','#7F77DD','#888780','#D85A30'];
+  const sD=sL.map(l=>r.filter(t=>t.status===l).length);
+  dc('rec-ch-status');
+  const c1=document.getElementById('rec-ch-status');
+  if(c1)charts['rec-ch-status']=new Chart(c1,{type:'doughnut',data:{labels:sL,datasets:[{data:sD,backgroundColor:sC,borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},cutout:'60%'}});
+  document.getElementById('rec-leg-status').innerHTML=sL.map((l,i)=>`<div class="li"><div class="ld" style="background:${sC[i]}"></div>${l} (${sD[i]})</div>`).join('');
+
+  // Chart 2: Category bar
+  const cats=[...new Set(r.map(t=>t.category).filter(Boolean))].sort();
+  const catData=cats.map(c=>r.filter(t=>t.category===c).length);
+  dc('rec-ch-category');
+  const c2=document.getElementById('rec-ch-category');
+  if(c2)charts['rec-ch-category']=new Chart(c2,{type:'bar',data:{labels:cats.length?cats:['No data'],datasets:[{data:cats.length?catData:[0],backgroundColor:'#7F77DD',borderRadius:4,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:tx,stepSize:1},grid:{color:gc}},y:{ticks:{color:tx,font:{size:11}},grid:{display:false}}}}});
+
+  // Chart 3: Daily task count — get all working days in range
+  const rangeDays=[];
+  const cur=new Date(start+'T00:00:00');
+  const endD=new Date(end+'T00:00:00');
+  while(cur<=endD){
+    const dw=cur.getDay();
+    if(dw!==0&&dw!==6)rangeDays.push(cur.toISOString().split('T')[0]);
+    cur.setDate(cur.getDate()+1);
+  }
+  const dailyLabels=rangeDays.map(d=>{const dt=new Date(d+'T00:00:00');return DAYS[dt.getDay()]+' '+dt.getDate();});
+  const dailyDone=rangeDays.map(d=>r.filter(t=>t.date===d&&t.status==='Done').length);
+  const dailyOther=rangeDays.map(d=>r.filter(t=>t.date===d&&t.status!=='Done').length);
+  dc('rec-ch-daily');
+  const c3=document.getElementById('rec-ch-daily');
+  if(c3)charts['rec-ch-daily']=new Chart(c3,{type:'bar',data:{labels:dailyLabels,datasets:[
+    {label:'Done',data:dailyDone,backgroundColor:'#1D9E75',borderRadius:3,borderSkipped:false},
+    {label:'Other',data:dailyOther,backgroundColor:'#B5D4F4',borderRadius:3,borderSkipped:false}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:tx,font:{size:11},boxWidth:10,boxHeight:10}}},scales:{x:{stacked:true,ticks:{color:tx,font:{size:10},maxRotation:45,autoSkip:rangeDays.length>15},grid:{display:false}},y:{stacked:true,ticks:{color:tx,stepSize:1},grid:{color:gc}}}}});
+
+  // Member workload bars
+  const allNames=[...new Set([...taskOwners,...assignees])];
+  const memberStats=allNames.map(name=>{
+    const mt=r.filter(t=>t.owner===name||t.a1===name||t.a2===name);
+    const days=mt.reduce((s,t)=>s+parseDays(t.workload),0);
+    const done=mt.filter(t=>t.status==='Done').length;
+    return{name,count:mt.length,days:Math.round(days*10)/10,done};
+  }).filter(m=>m.count>0).sort((a,b)=>b.count-a.count);
+
+  const maxCount=Math.max(...memberStats.map(m=>m.count),1);
+  const barsEl=document.getElementById('rec-member-bars');
+  if(!memberStats.length){
+    barsEl.innerHTML='<div style="font-size:13px;color:var(--tx3);padding:8px 0;">No tasks found for this period.</div>';
+  } else {
+    barsEl.innerHTML=memberStats.map(m=>{
+      const pct=Math.round(m.count/maxCount*100);
+      const initials=m.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+      return`<div style="display:flex;align-items:center;gap:12px;">
+        <div class="cap-avatar" style="width:28px;height:28px;font-size:10px;flex-shrink:0;">${initials}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:12px;font-weight:500;">${esc(m.name)}</span>
+            <span style="font-size:11px;color:var(--tx2);">${m.count} task${m.count!==1?'s':''} · ${m.days}d · ${m.done} done</span>
+          </div>
+          <div style="height:7px;background:var(--bg3);border-radius:4px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:${m.days>5?'#E24B4A':m.days>3?'#EF9F27':'#185FA5'};border-radius:4px;transition:width .4s;"></div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Task table
+  document.getElementById('rec-task-count').textContent=`${r.length} tasks`;
   const cf=customFields;
   let thead=`<thead><tr>
-    <th class="ns">Date</th><th class="ns">Day</th><th class="ns">Source</th><th class="ns">BU / Geography</th>
-    <th class="ns">Priority</th><th class="ns">Task</th><th class="ns">Category</th><th class="ns">Client / Internal</th>
-    <th class="ns">Owner</th><th class="ns">Assignee 1</th><th class="ns">Assignee 2</th>
-    <th class="ns">Est. Workload</th><th class="ns">Submission Date</th><th class="ns">Status</th>
-    <th class="ns">Rating</th><th class="ns">Remarks</th><th class="ns">Doc Link</th>`;
+    <th class="ns">Date</th><th class="ns">Day</th><th class="ns">Task</th>
+    <th class="ns">Category</th><th class="ns">Owner</th><th class="ns">Assignees</th>
+    <th class="ns">Workload</th><th class="ns">Status</th><th class="ns">Priority</th>
+    <th class="ns">Client / Internal</th><th class="ns">Rating</th><th class="ns">Remarks</th>`;
   cf.forEach(f=>thead+=`<th class="ns">${esc(f.label)}</th>`);
   thead+='</tr></thead>';
   const tbl=document.getElementById('recent-table');
-  if(!r.length){tbl.innerHTML=thead+`<tbody><tr><td colspan="${17+cf.length}" class="empty">No tasks logged in this window.</td></tr></tbody>`;return;}
+  if(!r.length){tbl.innerHTML=thead+`<tbody><tr><td colspan="${12+cf.length}" class="empty">No tasks logged in this period.</td></tr></tbody>`;return;}
   let tbody='<tbody>';
   r.forEach(t=>{
     const dn=t.date?DAYS[new Date(t.date+'T00:00:00').getDay()]:'—';
     const cd=t.custom_data||{};
+    const asgn=[t.a1,t.a2].filter(Boolean).join(', ')||'—';
     let row=`<tr>
-    <td style="white-space:nowrap">${t.date||'—'}</td><td style="font-weight:500;font-size:11px">${dn}</td>
-    <td>${esc(t.source)||'—'}</td><td style="font-size:11px">${esc(t.bu)||'—'}</td>
-    <td>${pb(t.priority)}</td><td class="tc">${esc(t.task)||'—'}</td>
-    <td style="font-size:11px;color:var(--tx2)">${esc(t.category)||'—'}</td><td>${cib(t.client)}</td>
-    <td>${esc(t.owner)||'—'}</td><td>${esc(t.a1)||'—'}</td><td>${esc(t.a2)||'—'}</td>
-    <td style="font-weight:500">${esc(t.workload)||'—'}</td><td style="white-space:nowrap">${t.submission||'—'}</td>
-    <td>${sb2(t.status)}</td><td>${strs(t.rating)}</td><td class="rc">${esc(t.remarks)||'—'}</td>
-    <td>${t.doc?`<a href="${esc(t.doc)}" class="doc-link" target="_blank" rel="noopener">↗ Open</a>`:'—'}</td>`;
+    <td style="white-space:nowrap">${t.date||'—'}</td>
+    <td style="font-weight:500;font-size:11px;white-space:nowrap">${dn}</td>
+    <td class="tc">${esc(t.task)||'—'}</td>
+    <td style="font-size:11px;color:var(--tx2)">${esc(t.category)||'—'}</td>
+    <td style="white-space:nowrap">${esc(t.owner)||'—'}</td>
+    <td style="white-space:nowrap;font-size:11px">${esc(asgn)}</td>
+    <td style="font-weight:500;white-space:nowrap">${esc(t.workload)||'—'}</td>
+    <td>${sb2(t.status)}</td>
+    <td>${pb(t.priority)}</td>
+    <td>${cib(t.client)}</td>
+    <td>${strs(t.rating)}</td>
+    <td class="rc">${esc(t.remarks)||'—'}</td>`;
     cf.forEach(f=>row+=`<td class="rc">${esc(cd[f.field_id])||'—'}</td>`);
     row+='</tr>';tbody+=row;
   });
@@ -1168,7 +1380,13 @@ async function saveOwnerAssigneeLists(){
 function exportCSV(type){
   let rows;
   if(type==='all'){rows=tasks;}
-  else{const w=weekWindows()[selWeek];rows=tasks.filter(t=>t.date>=w.start&&t.date<=w.end).sort((a,b)=>a.date<b.date?-1:1);}
+  else{
+    const weeks=getWeeksOfMonth(recSelMonth);
+    let start,end;
+    if(recSelWeek===0){const [y,mo]=recSelMonth.split('-').map(Number);start=recSelMonth+'-01';end=new Date(y,mo,0).toISOString().split('T')[0];}
+    else{const w=weeks.find(w=>w.num===recSelWeek);start=w?w.start:recSelMonth+'-01';end=w?w.end:recSelMonth+'-28';}
+    rows=tasks.filter(t=>t.date&&t.date>=start&&t.date<=end).sort((a,b)=>a.date<b.date?-1:1);
+  }
   const sysH=['Date','Task','Source','BU / Geography','Priority','Task Owner','Assignee 1','Assignee 2','Client / Internal','Category','Est. Workload','Submission Date','Status','Work Rating','Remarks','Doc Link'];
   const cfH=customFields.map(f=>f.label);
   const csv=[[...sysH,...cfH].map(h=>`"${h}"`).join(','),...rows.map(t=>{
