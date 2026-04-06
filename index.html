@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Team Activity Tracker</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -24,24 +25,29 @@
 }}
 body{font-family:var(--font);background:var(--bg3);color:var(--tx1);min-height:100vh;}
 
-/* ── LOGIN ── */
-#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg3);}
-.login-card{background:var(--bg1);border:0.5px solid var(--bl);border-radius:var(--rl);padding:2rem 2.25rem;width:360px;max-width:94vw;}
-.login-logo{font-size:15px;font-weight:700;margin-bottom:1.5rem;color:var(--tx1);}
-.login-logo span{color:var(--accent);}
+/* LOADING */
+#loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:16px;}
+.spinner{width:36px;height:36px;border:3px solid var(--bl);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{font-size:13px;color:var(--tx2);}
+
+/* LOGIN */
+#login-screen{display:none;align-items:center;justify-content:center;min-height:100vh;background:var(--bg3);}
+.login-card{background:var(--bg1);border:0.5px solid var(--bl);border-radius:var(--rl);padding:2rem 2.25rem;width:380px;max-width:94vw;}
+.login-logo{font-size:15px;font-weight:700;margin-bottom:1.5rem;}.login-logo span{color:var(--accent);}
 .login-card h2{font-size:18px;font-weight:600;margin-bottom:.25rem;}
 .login-sub{font-size:12px;color:var(--tx3);margin-bottom:1.5rem;}
 .lf{display:flex;flex-direction:column;gap:5px;margin-bottom:14px;}
 .lf label{font-size:11px;color:var(--tx2);font-weight:500;text-transform:uppercase;letter-spacing:.4px;}
 .lf input,.lf select{font-family:var(--font);font-size:13px;border:0.5px solid var(--bm);border-radius:var(--rm);background:var(--bg2);color:var(--tx1);padding:8px 10px;outline:none;height:38px;}
-.lf input:focus,.lf select:focus{border-color:var(--bs);}
+.lf input:focus{border-color:var(--bs);}
 .login-err{font-size:12px;color:var(--danger);margin-bottom:12px;display:none;}
-.user-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1.5rem;}
-.user-badge{font-size:11px;padding:3px 10px;border-radius:20px;border:0.5px solid var(--bm);background:var(--bg2);color:var(--tx2);cursor:pointer;transition:all .15s;}
+.user-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1.25rem;}
+.user-badge{font-size:12px;padding:5px 12px;border-radius:20px;border:0.5px solid var(--bm);background:var(--bg2);color:var(--tx2);cursor:pointer;transition:all .15s;}
 .user-badge:hover,.user-badge.sel{background:var(--tx1);color:var(--bg1);border-color:var(--tx1);}
-.login-hint{font-size:11px;color:var(--tx3);margin-top:12px;text-align:center;}
+.login-hint{font-size:11px;color:var(--tx3);margin-top:12px;text-align:center;line-height:1.6;}
 
-/* ── APP ── */
+/* APP */
 #app{display:none;}
 nav{position:sticky;top:0;z-index:100;height:52px;background:var(--bg1);border-bottom:0.5px solid var(--bl);display:flex;align-items:center;padding:0 1.5rem;gap:0;}
 .nav-brand{font-size:14px;font-weight:600;margin-right:2rem;white-space:nowrap;}
@@ -57,30 +63,32 @@ nav{position:sticky;top:0;z-index:100;height:52px;background:var(--bg1);border-b
 .role-badge.admin{background:#FAECE7;color:#712B13;}
 @media(prefers-color-scheme:dark){.role-badge.admin{background:#4A1B0C;color:#F5C4B3;}}
 
-/* ── PAGES ── */
+/* PAGES */
 .page{display:none;padding:1.5rem;}
 .page.active{display:block;}
 h2{font-size:18px;font-weight:600;letter-spacing:-.2px;}
 .row-between{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1.25rem;}
 .row-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 
-/* ── CONTROLS ── */
-select,input[type=text],input[type=date],input[type=url],textarea{font-family:var(--font);font-size:13px;border:0.5px solid var(--bm);border-radius:var(--rm);background:var(--bg2);color:var(--tx1);padding:7px 10px;outline:none;transition:border-color .15s;}
+/* CONTROLS */
+select,input[type=text],input[type=date],input[type=url],input[type=number],textarea{font-family:var(--font);font-size:13px;border:0.5px solid var(--bm);border-radius:var(--rm);background:var(--bg2);color:var(--tx1);padding:7px 10px;outline:none;transition:border-color .15s;}
 select:focus,input:focus,textarea:focus{border-color:var(--bs);}
 select{height:34px;cursor:pointer;}
-input[type=text],input[type=date]{height:34px;}
+input[type=text],input[type=date],input[type=number]{height:34px;}
 .btn{font-family:var(--font);font-size:13px;padding:7px 14px;border-radius:var(--rm);border:0.5px solid var(--bm);background:var(--bg2);color:var(--tx1);cursor:pointer;transition:background .12s;white-space:nowrap;}
 .btn:hover{background:var(--bg3);}
 .btn-primary{background:var(--tx1);color:var(--bg1);border-color:var(--tx1);}
 .btn-primary:hover{opacity:.82;background:var(--tx1);}
-.btn-danger{background:#FCEBEB;color:#791F1F;border-color:#F7C1C1;}
-.btn-danger:hover{background:#F7C1C1;}
-@media(prefers-color-scheme:dark){.btn-danger{background:#501313;color:#F7C1C1;border-color:#791F1F;}}
 .btn-sm{padding:4px 9px;font-size:11px;}
 .btn-del{color:var(--danger);}
 @media(prefers-color-scheme:dark){.btn-del{color:#F7C1C1;}}
 
-/* ── STATS ── */
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--tx1);color:var(--bg1);font-size:13px;padding:10px 18px;border-radius:var(--rm);z-index:999;opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateY(0);}
+.toast.error{background:#A32D2D;}
+
+/* STATS */
 .stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:1.25rem;}
 @media(max-width:640px){.stat-grid{grid-template-columns:1fr 1fr;}}
 .stat{background:var(--bg1);border-radius:var(--rm);border:0.5px solid var(--bl);padding:14px 16px;}
@@ -88,11 +96,11 @@ input[type=text],input[type=date]{height:34px;}
 .stat-value{font-size:26px;font-weight:600;}
 .stat-sub{font-size:11px;color:var(--tx3);margin-top:2px;}
 
-/* ── FILTER ── */
+/* FILTER */
 .filter-card{background:var(--bg1);border:0.5px solid var(--bl);border-radius:var(--rl);padding:12px 16px;margin-bottom:1rem;}
 .filter-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
 
-/* ── TABLE ── */
+/* TABLE */
 .table-card{background:var(--bg1);border:0.5px solid var(--bl);border-radius:var(--rl);overflow:hidden;}
 .table-wrap{overflow-x:auto;}
 table{width:100%;border-collapse:collapse;font-size:12px;}
@@ -132,7 +140,7 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
 .export-bar span{font-size:11px;color:var(--tx3);}
 #rec-count{font-size:12px;color:var(--tx3);}
 
-/* ── MODAL ── */
+/* MODAL */
 .mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;align-items:center;justify-content:center;padding:1rem;}
 .mo.open{display:flex;}
 .modal{background:var(--bg1);border-radius:var(--rl);border:0.5px solid var(--bm);width:760px;max-width:100%;max-height:92vh;overflow-y:auto;padding:1.75rem;}
@@ -145,15 +153,14 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
 .fi select,.fi input,.fi textarea{width:100%;background:var(--bg2);}
 .fi textarea{resize:vertical;min-height:64px;}
 .mf{display:flex;justify-content:flex-end;gap:8px;margin-top:1.5rem;padding-top:1rem;border-top:0.5px solid var(--bl);}
-.read-only-note{font-size:11px;color:var(--tx3);margin-top:4px;}
 
-/* ── WEEK TABS ── */
+/* WEEK TABS */
 .week-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem;}
 .wt{font-family:var(--font);font-size:12px;padding:5px 12px;border-radius:var(--rm);border:0.5px solid var(--bm);background:var(--bg2);color:var(--tx2);cursor:pointer;transition:all .15s;}
 .wt:hover{background:var(--bg3);color:var(--tx1);}
 .wt.active{background:var(--tx1);color:var(--bg1);border-color:var(--tx1);}
 
-/* ── EXEC CHARTS ── */
+/* EXEC */
 .cg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:14px;}
 @media(max-width:800px){.cg{grid-template-columns:1fr;}}
 .cc{background:var(--bg1);border:0.5px solid var(--bl);border-radius:var(--rl);padding:16px 18px;}
@@ -174,7 +181,7 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
 .pf{height:100%;border-radius:3px;background:#185FA5;}
 @media(prefers-color-scheme:dark){.pf{background:#B5D4F4;}}
 
-/* ── ADMIN PAGE ── */
+/* ADMIN */
 .admin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
 @media(max-width:760px){.admin-grid{grid-template-columns:1fr;}}
 .admin-card{background:var(--bg1);border:0.5px solid var(--bl);border-radius:var(--rl);padding:1.25rem;}
@@ -182,20 +189,16 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
 .admin-card p{font-size:12px;color:var(--tx2);margin-bottom:1rem;line-height:1.5;}
 .admin-card.full{grid-column:1/-1;}
 .field-list{display:flex;flex-direction:column;gap:8px;margin-bottom:1rem;}
-.field-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border-radius:var(--rm);font-size:12px;}
-.field-row .fi-name{flex:1;font-weight:500;}
+.field-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border-radius:var(--rm);font-size:12px;flex-wrap:wrap;}
+.field-row .fi-name{flex:1;font-weight:500;min-width:100px;}
 .field-row .fi-type{font-size:11px;color:var(--tx2);background:var(--bg3);padding:2px 7px;border-radius:4px;}
-.field-row .fi-req{font-size:10px;color:var(--accent-tx);background:var(--accent-bg);padding:2px 6px;border-radius:4px;}
 .field-row .fi-system{font-size:10px;color:var(--tx3);font-style:italic;}
 .field-row .fi-custom{font-size:10px;color:#27500A;background:#EAF3DE;padding:2px 6px;border-radius:4px;}
 @media(prefers-color-scheme:dark){.field-row .fi-custom{background:#173404;color:#C0DD97;}}
 .add-field-form{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;}
-@media(max-width:500px){.add-field-form{grid-template-columns:1fr;}}
-.add-field-form .fi{margin:0;}
 .user-mgmt-list{display:flex;flex-direction:column;gap:8px;margin-bottom:1rem;}
-.user-row{display:flex;align-items:center;gap:10px;padding:9px 10px;background:var(--bg2);border-radius:var(--rm);font-size:13px;}
+.user-row{display:flex;align-items:center;gap:10px;padding:9px 10px;background:var(--bg2);border-radius:var(--rm);font-size:13px;flex-wrap:wrap;}
 .user-row .u-name{flex:1;font-weight:500;}
-.user-row .u-role{font-size:11px;padding:2px 8px;border-radius:4px;}
 .role-admin{background:#FAECE7;color:#712B13;}
 .role-member{background:#E6F1FB;color:#0C447C;}
 .role-viewer{background:#EAF3DE;color:#27500A;}
@@ -213,13 +216,22 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
 .perms-grid .ph{font-size:11px;font-weight:500;color:var(--tx2);text-transform:uppercase;letter-spacing:.4px;padding-bottom:4px;border-bottom:0.5px solid var(--bl);}
 .perms-grid .pn{padding:6px 0;border-bottom:0.5px solid var(--bl);}
 .perms-grid input[type=checkbox]{width:15px;height:15px;cursor:pointer;justify-self:center;}
+.saving-indicator{font-size:11px;color:var(--tx3);display:none;}
+.saving-indicator.show{display:inline;}
 </style>
 </head>
 <body>
 
-<!-- ══════════════════════════════════
-     LOGIN SCREEN
-══════════════════════════════════ -->
+<!-- LOADING -->
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <div class="loading-text">Connecting to database…</div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- LOGIN -->
 <div id="login-screen">
   <div class="login-card">
     <div class="login-logo">Activity <span>Tracker</span></div>
@@ -234,23 +246,18 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
       <input type="password" id="login-pass" placeholder="Enter password…" onkeydown="if(event.key==='Enter')doLogin()">
     </div>
     <div class="login-err" id="login-err">Incorrect password. Please try again.</div>
-    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Sign in</button>
-    <div class="login-hint">Demo passwords — admin: <b>admin123</b> &nbsp;|&nbsp; member: <b>pass123</b> &nbsp;|&nbsp; viewer: <b>view123</b></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:4px;" onclick="doLogin()">Sign in</button>
+    <div class="login-hint">Default passwords — admin: <b>admin123</b> &nbsp;|&nbsp; member: <b>pass123</b> &nbsp;|&nbsp; viewer: <b>view123</b></div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════
-     APP SHELL
-══════════════════════════════════ -->
+<!-- APP -->
 <div id="app">
 <nav>
   <span class="nav-brand">Activity Tracker</span>
-  <div class="nav-tabs" id="nav-tabs">
-    <button class="nav-tab active" onclick="goPage('tracker',this)">Tracker</button>
-    <button class="nav-tab" onclick="goPage('recent',this)">Last 5 Working Days</button>
-    <button class="nav-tab" onclick="goPage('exec',this)">Executive Dashboard</button>
-  </div>
+  <div class="nav-tabs" id="nav-tabs"></div>
   <div class="nav-right">
+    <span class="saving-indicator" id="saving-ind">Saving…</span>
     <div class="user-pill">
       <span id="nav-username"></span>
       <span class="role-badge" id="nav-role-badge"></span>
@@ -318,53 +325,43 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
   </div>
   <div class="cc" style="margin-bottom:14px;"><div class="ct" style="margin-bottom:12px;">Team workload summary</div><table class="mt2" id="exec-member-table"></table></div>
   <div class="cg">
-    <div class="cc"><div class="ct">Tasks per team member</div><div class="cs">Total ownership (owner + assignee)</div><div class="cw" style="height:260px;"><canvas id="ch-member"></canvas></div></div>
-    <div class="cc"><div class="ct">Average work rating by member</div><div class="cs">Based on rated tasks only</div><div class="cw" style="height:260px;"><canvas id="ch-rating"></canvas></div></div>
+    <div class="cc"><div class="ct">Tasks per team member</div><div class="cs">Owner + assignee</div><div class="cw" style="height:260px;"><canvas id="ch-member"></canvas></div></div>
+    <div class="cc"><div class="ct">Average work rating</div><div class="cs">Rated tasks only</div><div class="cw" style="height:260px;"><canvas id="ch-rating"></canvas></div></div>
   </div>
 </div>
 
-<!-- PAGE 4: ADMIN (only shown to admin role) -->
+<!-- PAGE 4: ADMIN -->
 <div id="page-admin" class="page">
   <div class="row-between" style="margin-bottom:1.25rem;">
     <h2>Admin panel</h2>
-    <span style="font-size:12px;color:var(--tx3);">Changes apply immediately across all views</span>
+    <span style="font-size:12px;color:var(--tx3);">All changes save to database instantly</span>
   </div>
-  <div class="info-banner">You are signed in as Admin. Changes made here affect the form fields, user list, and permissions for all users.</div>
-
+  <div class="info-banner">You are signed in as Admin. Changes here affect all users in real time.</div>
   <div class="admin-grid">
-
-    <!-- FIELD MANAGER -->
     <div class="admin-card full">
       <h3>Form field manager</h3>
-      <p>Add custom fields that appear in the Add/Edit Task form and in the main table. System fields cannot be removed.</p>
+      <p>Add custom fields that appear in the task form and table. System fields cannot be removed.</p>
       <div class="field-list" id="field-list"></div>
       <div class="divider"></div>
       <div style="font-size:13px;font-weight:500;margin-bottom:10px;">Add new field</div>
       <div class="add-field-form">
         <div class="fi"><label>Field label</label><input type="text" id="new-field-label" placeholder="e.g. Review Notes"></div>
         <div class="fi"><label>Field type</label>
-          <select id="new-field-type">
+          <select id="new-field-type" onchange="toggleOptionsInput()">
             <option value="text">Text (single line)</option>
-            <option value="textarea">Text area (multi-line)</option>
-            <option value="select">Dropdown (options)</option>
+            <option value="textarea">Text area</option>
+            <option value="select">Dropdown</option>
             <option value="date">Date</option>
             <option value="number">Number</option>
           </select>
         </div>
-        <div class="fi" id="options-fi" style="display:none;"><label>Options (comma-separated)</label><input type="text" id="new-field-options" placeholder="Option 1, Option 2, Option 3"></div>
-        <div class="fi"><label>Required?</label>
-          <select id="new-field-req"><option value="no">No</option><option value="yes">Yes</option></select>
-        </div>
-        <div style="display:flex;align-items:flex-end;">
-          <button class="btn btn-primary" onclick="addCustomField()">Add field</button>
-        </div>
+        <div style="display:flex;align-items:flex-end;"><button class="btn btn-primary" onclick="addCustomField()">Add field</button></div>
       </div>
+      <div class="fi" id="options-fi" style="display:none;margin-top:10px;"><label>Dropdown options (comma-separated)</label><input type="text" id="new-field-options" placeholder="Option 1, Option 2, Option 3"></div>
     </div>
-
-    <!-- USER MANAGEMENT -->
     <div class="admin-card">
       <h3>User management</h3>
-      <p>Manage users and their roles. Roles control what each user can see and do.</p>
+      <p>Manage users and their roles.</p>
       <div class="user-mgmt-list" id="user-mgmt-list"></div>
       <div class="divider"></div>
       <div style="font-size:13px;font-weight:500;margin-bottom:10px;">Add new user</div>
@@ -374,46 +371,31 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
         <div class="fi"><label>Role</label>
           <select id="nu-role"><option value="member">Member</option><option value="viewer">Viewer</option><option value="admin">Admin</option></select>
         </div>
-        <div style="display:flex;align-items:flex-end;">
-          <button class="btn btn-primary" onclick="addUser()">Add</button>
-        </div>
+        <div style="display:flex;align-items:flex-end;"><button class="btn btn-primary" onclick="addUser()">Add</button></div>
       </div>
     </div>
-
-    <!-- PERMISSIONS -->
     <div class="admin-card">
       <h3>Role permissions</h3>
-      <p>Control what each role can access. Changes take effect on next sign-in.</p>
+      <p>Control what each role can access.</p>
       <div class="perms-grid" id="perms-grid"></div>
     </div>
-
-    <!-- OWNER / ASSIGNEE LISTS -->
     <div class="admin-card">
       <h3>Task owner &amp; assignee list</h3>
-      <p>Edit who appears in the Task Owner and Assignee dropdowns.</p>
-      <div class="fi" style="margin-bottom:10px;">
-        <label>Task owners (one per line)</label>
-        <textarea id="owner-list" rows="4"></textarea>
-      </div>
-      <div class="fi" style="margin-bottom:12px;">
-        <label>Assignees (one per line)</label>
-        <textarea id="assignee-list" rows="5"></textarea>
-      </div>
+      <p>Edit who appears in the dropdowns.</p>
+      <div class="fi" style="margin-bottom:10px;"><label>Task owners (one per line)</label><textarea id="owner-list" rows="4"></textarea></div>
+      <div class="fi" style="margin-bottom:12px;"><label>Assignees (one per line)</label><textarea id="assignee-list" rows="5"></textarea></div>
       <button class="btn btn-primary btn-sm" onclick="saveOwnerAssigneeLists()">Save changes</button>
-      <div id="oal-saved" style="font-size:11px;color:#1D9E75;margin-top:6px;display:none;">Saved!</div>
+      <div id="oal-saved" style="font-size:11px;color:#1D9E75;margin-top:6px;display:none;">✓ Saved to database</div>
     </div>
-
   </div>
 </div>
 </div><!-- end #app -->
 
-<!-- ADD/EDIT TASK MODAL -->
+<!-- TASK MODAL -->
 <div class="mo" id="modal-overlay" onclick="closeOnBg(event)">
   <div class="modal">
     <div class="mt" id="modal-title">Add task</div>
-    <div class="fg" id="modal-form-grid">
-      <!-- filled dynamically -->
-    </div>
+    <div class="fg" id="modal-form-grid"></div>
     <div class="mf">
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" id="modal-save-btn" onclick="saveTask()">Save task</button>
@@ -422,80 +404,47 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
 </div>
 
 <script>
-/* ═══════════════ DATA ═══════════════ */
+/* ═══════════════════════════════════════
+   SUPABASE CONFIG
+═══════════════════════════════════════ */
+const SUPABASE_URL = 'https://zcjvwgudfbtadtpaftar.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_fBXi7rjsECu_XozI9helWQ_sdfZndAI';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* ═══════════════════════════════════════
+   STATE
+═══════════════════════════════════════ */
 const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const PAL=['#185FA5','#1D9E75','#D85A30','#7F77DD','#BA7517','#D4537E','#639922','#5F5E5A'];
 
-// Users & roles
-let users=[
-  {name:'Amal',role:'admin',pass:'admin123'},
-  {name:'Sreejith',role:'admin',pass:'admin123'},
-  {name:'Vivek',role:'member',pass:'pass123'},
-  {name:'Edwin',role:'member',pass:'pass123'},
-  {name:'Vishnu',role:'member',pass:'pass123'},
-  {name:'Aishwariya',role:'member',pass:'pass123'},
-  {name:'Aggie',role:'member',pass:'pass123'},
-  {name:'Naseef',role:'member',pass:'pass123'},
-  {name:'Abhilash',role:'member',pass:'pass123'},
-  {name:'Haritha',role:'viewer',pass:'view123'},
-];
-
+let tasks=[], users=[], customFields=[], settings={};
 let taskOwners=['Amal','Sreejith'];
 let assignees=['Vivek','Edwin','Vishnu','Aishwariya','Aggie','Naseef','Abhilash','Haritha'];
-
-// Permissions per role: {canAdd, canEdit, canDelete, canViewExec, canViewAdmin}
 let permissions={
   admin:{canAdd:true,canEdit:true,canDelete:true,canViewExec:true,canViewAdmin:true},
   member:{canAdd:true,canEdit:true,canDelete:false,canViewExec:false,canViewAdmin:false},
   viewer:{canAdd:false,canEdit:false,canDelete:false,canViewExec:true,canViewAdmin:false},
 };
-
-// System fields (not deletable)
-const SYSTEM_FIELDS=[
-  {id:'date',label:'Date',type:'date',required:true,system:true},
-  {id:'source',label:'Source',type:'text',required:false,system:true},
-  {id:'bu',label:'BU / Geography',type:'text',required:false,system:true},
-  {id:'priority',label:'Priority',type:'select',required:true,system:true,options:['High','Medium','Low']},
-  {id:'task',label:'Task',type:'text',required:true,system:true},
-  {id:'category',label:'Category',type:'text',required:false,system:true},
-  {id:'client',label:'Client / Internal',type:'select',required:true,system:true,options:['Client','Internal']},
-  {id:'owner',label:'Task Owner',type:'owner_select',required:false,system:true},
-  {id:'a1',label:'Task Assignee 1',type:'assignee_select',required:false,system:true},
-  {id:'a2',label:'Task Assignee 2',type:'assignee_select',required:false,system:true},
-  {id:'workload',label:'Est. Workload',type:'text',required:false,system:true},
-  {id:'submission',label:'Submission Date',type:'date',required:false,system:true},
-  {id:'status',label:'Status',type:'select',required:true,system:true,options:['To do','In progress','Review','Done','Blocked']},
-  {id:'rating',label:'Work Rating (1–5)',type:'rating_select',required:false,system:true},
-  {id:'remarks',label:'Remarks',type:'textarea',required:false,system:true},
-  {id:'doc',label:'Doc Link',type:'url',required:false,system:true},
-];
-
-// Custom fields added by admin
-let customFields=[];
-
-let tasks=[
-  {id:1,date:'2026-03-15',source:'Slack',bu:'APAC',priority:'High',task:'Redesign onboarding flow',category:'Design',client:'Client',owner:'Amal',a1:'Abhilash',a2:'Haritha',workload:'3d',submission:'2026-03-28',status:'Done',rating:5,remarks:'Delivered ahead of schedule',doc:'https://docs.google.com/'},
-  {id:2,date:'2026-03-20',source:'Email',bu:'Europe',priority:'Medium',task:'Q1 performance review deck',category:'Reporting',client:'Internal',owner:'Sreejith',a1:'Naseef',a2:'',workload:'8h',submission:'2026-04-05',status:'In progress',rating:'',remarks:'Draft shared with stakeholders',doc:''},
-  {id:3,date:'2026-03-27',source:'Jira',bu:'North America',priority:'High',task:'API rate limit fix',category:'Development',client:'Client',owner:'Amal',a1:'Aggie',a2:'Aishwariya',workload:'2d',submission:'2026-04-01',status:'Review',rating:'',remarks:'PR raised, awaiting review',doc:'https://github.com/'},
-  {id:4,date:'2026-03-28',source:'Meeting',bu:'APAC',priority:'Low',task:'Update brand guidelines doc',category:'Documentation',client:'Internal',owner:'Sreejith',a1:'',a2:'',workload:'4h',submission:'2026-04-10',status:'To do',rating:'',remarks:'',doc:''},
-  {id:5,date:'2026-04-01',source:'Email',bu:'MEA',priority:'High',task:'Client compliance report',category:'Compliance',client:'Client',owner:'Amal',a1:'Naseef',a2:'',workload:'1d',submission:'2026-04-03',status:'Blocked',rating:'',remarks:'Waiting on client data',doc:''},
-  {id:6,date:'2026-03-31',source:'Slack',bu:'APAC',priority:'Medium',task:'Weekly status report',category:'Reporting',client:'Internal',owner:'Sreejith',a1:'Edwin',a2:'',workload:'2h',submission:'2026-03-31',status:'Done',rating:4,remarks:'Sent on time',doc:''},
-  {id:7,date:'2026-04-01',source:'Jira',bu:'India',priority:'High',task:'Fix login bug on mobile',category:'Development',client:'Client',owner:'Amal',a1:'Vivek',a2:'Vishnu',workload:'6h',submission:'2026-04-02',status:'In progress',rating:'',remarks:'Reproducing on iOS 17',doc:''},
-  {id:8,date:'2026-04-02',source:'Email',bu:'APAC',priority:'Medium',task:'Prepare onboarding checklist',category:'Documentation',client:'Internal',owner:'Sreejith',a1:'Haritha',a2:'',workload:'3h',submission:'2026-04-04',status:'To do',rating:'',remarks:'',doc:''},
-  {id:9,date:'2026-03-24',source:'Slack',bu:'Europe',priority:'Medium',task:'UX audit for dashboard',category:'Design',client:'Client',owner:'Amal',a1:'Aishwariya',a2:'',workload:'1d',submission:'2026-03-30',status:'Done',rating:4,remarks:'Positive feedback',doc:''},
-  {id:10,date:'2026-03-26',source:'Meeting',bu:'India',priority:'High',task:'Security patch deployment',category:'Development',client:'Internal',owner:'Sreejith',a1:'Abhilash',a2:'',workload:'4h',submission:'2026-03-27',status:'Done',rating:5,remarks:'Zero downtime',doc:''},
-];
-let nextId=11,sortCol='date',sortDir=1,editId=null,selWeek=0,currentUser=null;
+let sortCol='date', sortDir=1, editId=null, selWeek=0, currentUser=null;
 let charts={};
 
-/* ═══════════════ HELPERS ═══════════════ */
+/* ═══════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════ */
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function dash(s){return s||'<span class="nv">—</span>';}
-function sb(s){const m={'Done':'b-done','In progress':'b-inprog','Review':'b-review','To do':'b-todo','Blocked':'b-blocked'};return`<span class="badge ${m[s]||'b-todo'}">${s}</span>`;}
+function sb2(s){const m={'Done':'b-done','In progress':'b-inprog','Review':'b-review','To do':'b-todo','Blocked':'b-blocked'};return`<span class="badge ${m[s]||'b-todo'}">${s}</span>`;}
 function pb(p){const m={'High':'b-high','Medium':'b-medium','Low':'b-low'};return`<span class="badge ${m[p]||'b-todo'}">${p}</span>`;}
-function cb(c){return`<span class="badge ${c==='Client'?'b-client':'b-internal'}">${c}</span>`;}
+function cib(c){return`<span class="badge ${c==='Client'?'b-client':'b-internal'}">${c}</span>`;}
 function strs(r){if(!r)return'<span class="nv">—</span>';return'<span class="stars">'+'★'.repeat(+r)+'<span style="opacity:.25">'+'★'.repeat(5-+r)+'</span></span>';}
 function perm(p){return currentUser&&permissions[currentUser.role]&&permissions[currentUser.role][p];}
+function showToast(msg,isError=false){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast'+(isError?' error':'');
+  setTimeout(()=>t.classList.add('show'),10);
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+function showSaving(){const el=document.getElementById('saving-ind');if(el){el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2000);}}
 function workdays(n,from){
   const d=from?new Date(from+'T00:00:00'):new Date();d.setHours(0,0,0,0);
   const arr=[];
@@ -514,18 +463,58 @@ function weekWindows(){
   return out;
 }
 
-/* ═══════════════ LOGIN ═══════════════ */
+/* ═══════════════════════════════════════
+   DATABASE — LOAD ALL DATA
+═══════════════════════════════════════ */
+async function loadAll(){
+  try{
+    const [tr,ur,cr,sr]=await Promise.all([
+      sb.from('tasks').select('*').order('created_at',{ascending:false}),
+      sb.from('app_users').select('*').order('name'),
+      sb.from('custom_fields').select('*').order('created_at'),
+      sb.from('settings').select('*'),
+    ]);
+    if(tr.error)throw tr.error;
+    if(ur.error)throw ur.error;
+    tasks=tr.data||[];
+    users=ur.data||[];
+    customFields=(cr.data||[]).map(f=>({...f,options:f.options||[]}));
+    // Parse settings
+    (sr.data||[]).forEach(row=>{
+      if(row.key==='task_owners')taskOwners=row.value;
+      if(row.key==='assignees')assignees=row.value;
+      if(row.key==='permissions')permissions=row.value;
+    });
+  }catch(e){
+    console.error('Load error:',e);
+    showToast('Failed to load data. Check your connection.',true);
+  }
+}
+
+/* ═══════════════════════════════════════
+   BOOT
+═══════════════════════════════════════ */
+async function boot(){
+  await loadAll();
+  document.getElementById('loading-screen').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  initLoginUI();
+}
+
+/* ═══════════════════════════════════════
+   LOGIN
+═══════════════════════════════════════ */
 let selectedLoginUser=null;
-function initLogin(){
+function initLoginUI(){
   const container=document.getElementById('user-badges');
-  container.innerHTML=users.map(u=>`<div class="user-badge" onclick="selectLoginUser('${u.name}',this)">${u.name}</div>`).join('');
+  container.innerHTML=users.map(u=>`<div class="user-badge" onclick="selectLoginUser('${esc(u.name)}',this)">${esc(u.name)}</div>`).join('');
 }
 function selectLoginUser(name,el){
   selectedLoginUser=name;
   document.querySelectorAll('.user-badge').forEach(b=>b.classList.remove('sel'));
   el.classList.add('sel');
 }
-function doLogin(){
+async function doLogin(){
   const pass=document.getElementById('login-pass').value;
   const err=document.getElementById('login-err');
   if(!selectedLoginUser){err.textContent='Please select a user.';err.style.display='block';return;}
@@ -539,7 +528,6 @@ function doLogin(){
   const rb=document.getElementById('nav-role-badge');
   rb.textContent=u.role.charAt(0).toUpperCase()+u.role.slice(1);
   rb.className='role-badge'+(u.role==='admin'?' admin':'');
-  // Show/hide nav tabs based on role
   buildNavTabs();
   render();
 }
@@ -554,17 +542,18 @@ function doLogout(){
 }
 function buildNavTabs(){
   const tabs=document.getElementById('nav-tabs');
-  tabs.innerHTML=`<button class="nav-tab active" onclick="goPage('tracker',this)">Tracker</button>`;
+  let html=`<button class="nav-tab active" onclick="goPage('tracker',this)">Tracker</button>
+  <button class="nav-tab" onclick="goPage('recent',this)">Last 5 Working Days</button>`;
   if(perm('canViewExec')||currentUser.role==='admin')
-    tabs.innerHTML+=`<button class="nav-tab" onclick="goPage('recent',this)">Last 5 Working Days</button>
-    <button class="nav-tab" onclick="goPage('exec',this)">Executive Dashboard</button>`;
-  else
-    tabs.innerHTML+=`<button class="nav-tab" onclick="goPage('recent',this)">Last 5 Working Days</button>`;
+    html+=`<button class="nav-tab" onclick="goPage('exec',this)">Executive Dashboard</button>`;
   if(perm('canViewAdmin'))
-    tabs.innerHTML+=`<button class="nav-tab admin-tab" onclick="goPage('admin',this)">Admin</button>`;
+    html+=`<button class="nav-tab admin-tab" onclick="goPage('admin',this)">Admin</button>`;
+  tabs.innerHTML=html;
 }
 
-/* ═══════════════ NAVIGATION ═══════════════ */
+/* ═══════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════ */
 function goPage(p,btn,silent){
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
@@ -578,8 +567,27 @@ function goPage(p,btn,silent){
   }
 }
 
-/* ═══════════════ TRACKER PAGE ═══════════════ */
-function allFields(){return [...SYSTEM_FIELDS,...customFields];}
+/* ═══════════════════════════════════════
+   TRACKER PAGE
+═══════════════════════════════════════ */
+const SYSTEM_FIELDS=[
+  {id:'date',label:'Date',type:'date',required:true,system:true},
+  {id:'source',label:'Source',type:'text',required:false,system:true},
+  {id:'bu',label:'BU / Geography',type:'text',required:false,system:true},
+  {id:'priority',label:'Priority',type:'select',required:true,system:true,options:['High','Medium','Low']},
+  {id:'task',label:'Task',type:'text',required:true,system:true},
+  {id:'category',label:'Category',type:'text',required:false,system:true},
+  {id:'client',label:'Client / Internal',type:'select',required:true,system:true,options:['Client','Internal']},
+  {id:'owner',label:'Task Owner',type:'owner_select',required:false,system:true},
+  {id:'a1',label:'Task Assignee 1',type:'assignee_select',required:false,system:true},
+  {id:'a2',label:'Task Assignee 2',type:'assignee_select',required:false,system:true},
+  {id:'workload',label:'Est. Workload',type:'text',required:false,system:true},
+  {id:'submission',label:'Submission Date',type:'date',required:false,system:true},
+  {id:'status',label:'Status',type:'select',required:true,system:true,options:['To do','In progress','Review','Done','Blocked']},
+  {id:'rating',label:'Work Rating (1–5)',type:'rating_select',required:false,system:true},
+  {id:'remarks',label:'Remarks',type:'textarea',required:false,system:true},
+  {id:'doc',label:'Doc Link',type:'url',required:false,system:true},
+];
 
 function fillFilterDDs(){
   const bE=document.getElementById('f-bu'),cE=document.getElementById('f-category');
@@ -607,10 +615,8 @@ const SCOLS=['date','source','bu','priority','task','category','client','workloa
 function render(){
   if(!currentUser)return;
   fillFilterDDs();
-  // Show/hide add button
   const addBtn=document.getElementById('btn-add-task');
   if(addBtn)addBtn.style.display=perm('canAdd')?'':'none';
-
   const f=getFiltered().sort((a,b)=>{
     let av=a[sortCol]||'',bv=b[sortCol]||'';
     if(sortCol==='rating'){av=+av||0;bv=+bv||0;return(av-bv)*sortDir;}
@@ -626,13 +632,9 @@ function render(){
     <div class="stat"><div class="stat-label">Done</div><div class="stat-value">${d}</div><div class="stat-sub">${n?Math.round(d/n*100):0}%</div></div>
     <div class="stat"><div class="stat-label">In progress</div><div class="stat-value">${ip}</div><div class="stat-sub">${bl} blocked</div></div>
     <div class="stat"><div class="stat-label">High priority</div><div class="stat-value">${hi}</div><div class="stat-sub">need attention</div></div>`;
-
   SCOLS.forEach(c=>{const e=document.getElementById('s-'+c);if(e){e.textContent='';e.classList.remove('on');}});
   const aEl=document.getElementById('s-'+sortCol);if(aEl){aEl.textContent=sortDir===1?' ↑':' ↓';aEl.classList.add('on');}
-
-  // Build table header including custom fields
   const cf=customFields;
-  const tbl=document.getElementById('main-table');
   let thead=`<thead><tr>
     <th onclick="sortBy('date')">Date <i class="si" id="s-date"></i></th>
     <th onclick="sortBy('source')">Source <i class="si" id="s-source"></i></th>
@@ -650,68 +652,64 @@ function render(){
   cf.forEach(field=>thead+=`<th class="ns">${esc(field.label)}</th>`);
   if(perm('canEdit')||perm('canDelete'))thead+=`<th class="ns"></th>`;
   thead+='</tr></thead>';
-
-  if(!f.length){
-    tbl.innerHTML=thead+`<tbody><tr><td colspan="${17+cf.length+(perm('canEdit')||perm('canDelete')?1:0)}" class="empty">No tasks match your filters.</td></tr></tbody>`;
-    return;
-  }
+  const colCount=16+cf.length+(perm('canEdit')||perm('canDelete')?1:0);
+  if(!f.length){document.getElementById('main-table').innerHTML=thead+`<tbody><tr><td colspan="${colCount}" class="empty">No tasks found. Add your first task!</td></tr></tbody>`;return;}
   let tbody='<tbody>';
   f.forEach(t=>{
+    const cd=t.custom_data||{};
     let row=`<tr>
     <td style="white-space:nowrap">${t.date||'<span class="nv">—</span>'}</td>
     <td>${dash(esc(t.source))}</td><td style="white-space:nowrap;font-size:11px">${dash(esc(t.bu))}</td>
     <td>${pb(t.priority)}</td><td class="tc">${esc(t.task)||'<span class="nv">—</span>'}</td>
-    <td style="font-size:11px;color:var(--tx2)">${dash(esc(t.category))}</td><td>${cb(t.client)}</td>
+    <td style="font-size:11px;color:var(--tx2)">${dash(esc(t.category))}</td><td>${cib(t.client)}</td>
     <td style="white-space:nowrap">${dash(esc(t.owner))}</td><td style="white-space:nowrap">${dash(esc(t.a1))}</td>
     <td style="white-space:nowrap">${dash(esc(t.a2))}</td>
     <td style="white-space:nowrap;font-weight:500">${dash(esc(t.workload))}</td>
     <td style="white-space:nowrap">${t.submission||'<span class="nv">—</span>'}</td>
-    <td>${sb(t.status)}</td><td>${strs(t.rating)}</td>
+    <td>${sb2(t.status)}</td><td>${strs(t.rating)}</td>
     <td class="rc">${esc(t.remarks)||'<span class="nv">—</span>'}</td>
     <td style="white-space:nowrap">${t.doc?`<a href="${esc(t.doc)}" class="doc-link" target="_blank" rel="noopener">↗ Open</a>`:'<span class="nv">—</span>'}</td>`;
-    cf.forEach(field=>row+=`<td class="rc">${esc(t['cf_'+field.id])||'<span class="nv">—</span>'}</td>`);
+    cf.forEach(field=>row+=`<td class="rc">${esc(cd[field.field_id])||'<span class="nv">—</span>'}</td>`);
     if(perm('canEdit')||perm('canDelete')){
       row+=`<td><div class="acts">`;
       if(perm('canEdit'))row+=`<button class="btn btn-sm" onclick="editTask(${t.id})">Edit</button>`;
       if(perm('canDelete'))row+=`<button class="btn btn-sm btn-del" onclick="delTask(${t.id})">Delete</button>`;
       row+=`</div></td>`;
     }
-    row+='</tr>';
-    tbody+=row;
+    row+='</tr>';tbody+=row;
   });
   tbody+='</tbody>';
-  tbl.innerHTML=thead+tbody;
+  document.getElementById('main-table').innerHTML=thead+tbody;
 }
-
 function sortBy(c){sortDir=sortCol===c?sortDir*-1:1;sortCol=c;render();}
 function clearFilters(){document.getElementById('search').value='';['f-bu','f-priority','f-status','f-client','f-category'].forEach(id=>document.getElementById(id).value='');render();}
 
-/* ═══════════════ MODAL ═══════════════ */
+/* ═══════════════════════════════════════
+   MODAL
+═══════════════════════════════════════ */
 function buildModalForm(taskData){
   const grid=document.getElementById('modal-form-grid');
   const readOnly=!perm('canEdit')&&!perm('canAdd');
-  const allF=allFields();
+  const cd=taskData?(taskData.custom_data||{}):{}; 
   let html='';
-  allF.forEach(field=>{
+  SYSTEM_FIELDS.forEach(field=>{
     const isFullWidth=['task','remarks','doc'].includes(field.id)||field.type==='textarea';
-    const val=taskData?(taskData[field.id]!==undefined?taskData[field.id]:taskData['cf_'+field.id]||''):'';
-    html+=`<div class="fi${isFullWidth?' full':''}"><label>${esc(field.label)}${field.required?'<span style="color:#E24B4A">*</span>':''}</label>`;
+    let val=taskData?taskData[field.id]||'':'';
+    html+=`<div class="fi${isFullWidth?' full':''}"><label>${esc(field.label)}${field.required?'<span style="color:#E24B4A"> *</span>':''}</label>`;
     if(readOnly){
-      html+=`<div style="padding:8px 10px;background:var(--bg2);border-radius:var(--rm);font-size:13px;color:var(--tx1);min-height:34px;">${esc(String(val||'—'))}</div>`;
+      html+=`<div style="padding:8px 10px;background:var(--bg2);border-radius:var(--rm);font-size:13px;min-height:34px;">${esc(String(val||'—'))}</div>`;
     } else if(field.type==='select'){
       html+=`<select id="mf-${field.id}">${field.options.map(o=>`<option${o===val?' selected':''}>${o}</option>`).join('')}</select>`;
     } else if(field.type==='owner_select'){
       html+=`<select id="mf-${field.id}"><option value="">— Select owner —</option>${taskOwners.map(n=>`<option${n===val?' selected':''}>${n}</option>`).join('')}</select>`;
     } else if(field.type==='assignee_select'){
-      html+=`<select id="mf-${field.id}"><option value="">— Select assignee —</option>${assignees.map(n=>`<option${n===val?' selected':''}>${n}</option>`).join('')}</select>`;
+      html+=`<select id="mf-${field.id}"><option value="">— None —</option>${assignees.map(n=>`<option${n===val?' selected':''}>${n}</option>`).join('')}</select>`;
     } else if(field.type==='rating_select'){
       html+=`<select id="mf-${field.id}"><option value="">— Not rated —</option>${[1,2,3,4,5].map(n=>`<option value="${n}"${n==val?' selected':''}>${n} ${'★'.repeat(n)}</option>`).join('')}</select>`;
     } else if(field.type==='textarea'){
       html+=`<textarea id="mf-${field.id}" placeholder="${esc(field.label)}…">${esc(String(val||''))}</textarea>`;
     } else if(field.type==='date'){
       html+=`<input type="date" id="mf-${field.id}" value="${esc(String(val||''))}">`;
-    } else if(field.type==='number'){
-      html+=`<input type="text" id="mf-${field.id}" placeholder="Number…" value="${esc(String(val||''))}">`;
     } else if(field.type==='url'){
       html+=`<input type="url" id="mf-${field.id}" placeholder="https://…" value="${esc(String(val||''))}">`;
     } else {
@@ -719,19 +717,33 @@ function buildModalForm(taskData){
     }
     html+='</div>';
   });
+  // Custom fields
+  customFields.forEach(field=>{
+    const val=cd[field.field_id]||'';
+    html+=`<div class="fi"><label>${esc(field.label)}</label>`;
+    if(field.type==='select'){
+      html+=`<select id="mf-cf-${field.field_id}">${(field.options||[]).map(o=>`<option${o===val?' selected':''}>${o}</option>`).join('')}</select>`;
+    } else if(field.type==='textarea'){
+      html+=`<textarea id="mf-cf-${field.field_id}">${esc(val)}</textarea>`;
+    } else if(field.type==='date'){
+      html+=`<input type="date" id="mf-cf-${field.field_id}" value="${esc(val)}">`;
+    } else if(field.type==='number'){
+      html+=`<input type="number" id="mf-cf-${field.field_id}" value="${esc(val)}">`;
+    } else {
+      html+=`<input type="text" id="mf-cf-${field.field_id}" placeholder="${esc(field.label)}…" value="${esc(val)}">`;
+    }
+    html+='</div>';
+  });
   grid.innerHTML=html;
-  // Set today for new task date
   if(!taskData){
-    const dateEl=document.getElementById('mf-date');
-    if(dateEl&&!dateEl.value)dateEl.value=new Date().toISOString().split('T')[0];
-    const priEl=document.getElementById('mf-priority');if(priEl)priEl.value='Medium';
-    const stEl=document.getElementById('mf-status');if(stEl)stEl.value='To do';
-    const ciEl=document.getElementById('mf-client');if(ciEl)ciEl.value='Internal';
+    const de=document.getElementById('mf-date');if(de&&!de.value)de.value=new Date().toISOString().split('T')[0];
+    const pe=document.getElementById('mf-priority');if(pe)pe.value='Medium';
+    const se=document.getElementById('mf-status');if(se)se.value='To do';
+    const ce=document.getElementById('mf-client');if(ce)ce.value='Internal';
   }
   const saveBtn=document.getElementById('modal-save-btn');
   if(saveBtn)saveBtn.style.display=readOnly?'none':'';
 }
-
 function openModal(id){
   editId=id||null;
   document.getElementById('modal-title').textContent=editId?'Edit task':'Add task';
@@ -742,34 +754,57 @@ function openModal(id){
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open');}
 function closeOnBg(e){if(e.target===document.getElementById('modal-overlay'))closeModal();}
 
-function saveTask(){
+async function saveTask(){
   const taskVal=(document.getElementById('mf-task')||{}).value||'';
   if(!taskVal.trim()){alert('Please enter a task description.');return;}
-  const t={id:editId||nextId++};
-  // Collect all field values
-  allFields().forEach(field=>{
+  const rec={};
+  SYSTEM_FIELDS.forEach(field=>{
     const el=document.getElementById('mf-'+field.id);
-    if(el){
-      const key=field.system?field.id:'cf_'+field.id;
-      t[key]=el.value||'';
-    }
+    if(el)rec[field.id]=el.value||null;
   });
-  // Fix: system fields use field.id directly
+  // Custom fields into jsonb
+  const cd={};
   customFields.forEach(field=>{
-    const el=document.getElementById('mf-'+field.id);
-    if(el)t['cf_'+field.id]=el.value||'';
+    const el=document.getElementById('mf-cf-'+field.field_id);
+    if(el)cd[field.field_id]=el.value||'';
   });
-  tasks=editId?tasks.map(x=>x.id===editId?t:x):[...tasks,t];
-  closeModal();render();
+  rec.custom_data=cd;
+  showSaving();
+  try{
+    let result;
+    if(editId){
+      result=await sb.from('tasks').update(rec).eq('id',editId).select();
+    } else {
+      result=await sb.from('tasks').insert([rec]).select();
+    }
+    if(result.error)throw result.error;
+    // Refresh tasks
+    const tr=await sb.from('tasks').select('*').order('created_at',{ascending:false});
+    if(tr.data)tasks=tr.data;
+    closeModal();
+    render();
+    showToast(editId?'Task updated!':'Task added!');
+  }catch(e){
+    console.error('Save error:',e);
+    showToast('Error saving task: '+e.message,true);
+  }
 }
 function editTask(id){if(perm('canEdit'))openModal(id);}
-function delTask(id){
+async function delTask(id){
   if(!perm('canDelete'))return;
   const t=tasks.find(x=>x.id===id);
-  if(confirm(`Delete: "${t.task}"?`)){tasks=tasks.filter(x=>x.id!==id);render();}
+  if(!confirm(`Delete: "${t.task}"?`))return;
+  showSaving();
+  const{error}=await sb.from('tasks').delete().eq('id',id);
+  if(error){showToast('Error deleting task',true);return;}
+  tasks=tasks.filter(x=>x.id!==id);
+  render();
+  showToast('Task deleted.');
 }
 
-/* ═══════════════ RECENT PAGE ═══════════════ */
+/* ═══════════════════════════════════════
+   RECENT PAGE
+═══════════════════════════════════════ */
 function renderRecent(){
   const wins=weekWindows();
   document.getElementById('week-tabs').innerHTML=wins.map((w,i)=>`<button class="wt${i===selWeek?' active':''}" onclick="selW(${i})">${w.label} (${w.start} – ${w.end})</button>`).join('');
@@ -789,31 +824,33 @@ function renderRecent(){
     <th class="ns">Owner</th><th class="ns">Assignee 1</th><th class="ns">Assignee 2</th>
     <th class="ns">Est. Workload</th><th class="ns">Submission Date</th><th class="ns">Status</th>
     <th class="ns">Rating</th><th class="ns">Remarks</th><th class="ns">Doc Link</th>`;
-  cf.forEach(field=>thead+=`<th class="ns">${esc(field.label)}</th>`);
+  cf.forEach(f=>thead+=`<th class="ns">${esc(f.label)}</th>`);
   thead+='</tr></thead>';
   const tbl=document.getElementById('recent-table');
   if(!r.length){tbl.innerHTML=thead+`<tbody><tr><td colspan="${17+cf.length}" class="empty">No tasks logged in this window.</td></tr></tbody>`;return;}
   let tbody='<tbody>';
   r.forEach(t=>{
     const dn=t.date?DAYS[new Date(t.date+'T00:00:00').getDay()]:'—';
+    const cd=t.custom_data||{};
     let row=`<tr>
     <td style="white-space:nowrap">${t.date||'—'}</td><td style="font-weight:500;font-size:11px">${dn}</td>
     <td>${esc(t.source)||'—'}</td><td style="font-size:11px">${esc(t.bu)||'—'}</td>
     <td>${pb(t.priority)}</td><td class="tc">${esc(t.task)||'—'}</td>
-    <td style="font-size:11px;color:var(--tx2)">${esc(t.category)||'—'}</td><td>${cb(t.client)}</td>
+    <td style="font-size:11px;color:var(--tx2)">${esc(t.category)||'—'}</td><td>${cib(t.client)}</td>
     <td>${esc(t.owner)||'—'}</td><td>${esc(t.a1)||'—'}</td><td>${esc(t.a2)||'—'}</td>
     <td style="font-weight:500">${esc(t.workload)||'—'}</td><td style="white-space:nowrap">${t.submission||'—'}</td>
-    <td>${sb(t.status)}</td><td>${strs(t.rating)}</td><td class="rc">${esc(t.remarks)||'—'}</td>
+    <td>${sb2(t.status)}</td><td>${strs(t.rating)}</td><td class="rc">${esc(t.remarks)||'—'}</td>
     <td>${t.doc?`<a href="${esc(t.doc)}" class="doc-link" target="_blank" rel="noopener">↗ Open</a>`:'—'}</td>`;
-    cf.forEach(field=>row+=`<td class="rc">${esc(t['cf_'+field.id])||'—'}</td>`);
+    cf.forEach(f=>row+=`<td class="rc">${esc(cd[f.field_id])||'—'}</td>`);
     row+='</tr>';tbody+=row;
   });
-  tbody+='</tbody>';
-  tbl.innerHTML=thead+tbody;
+  tbl.innerHTML=thead+tbody+'</tbody>';
 }
 function selW(i){selWeek=i;renderRecent();}
 
-/* ═══════════════ EXEC PAGE ═══════════════ */
+/* ═══════════════════════════════════════
+   EXEC PAGE
+═══════════════════════════════════════ */
 function dc(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
 function mc(id,cfg){dc(id);const c=document.getElementById(id);if(c)charts[id]=new Chart(c,cfg);}
 function isDark(){return window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;}
@@ -821,8 +858,7 @@ function renderExec(){
   document.getElementById('exec-date').textContent='As of '+new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
   const n=tasks.length,d=tasks.filter(t=>t.status==='Done').length,
     ip=tasks.filter(t=>t.status==='In progress').length,
-    bl=tasks.filter(t=>t.status==='Blocked').length,
-    hi=tasks.filter(t=>t.priority==='High').length;
+    bl=tasks.filter(t=>t.status==='Blocked').length;
   const rat=tasks.filter(t=>t.rating);
   const avg=rat.length?+(rat.reduce((s,t)=>s+(+t.rating),0)/rat.length).toFixed(1):0;
   document.getElementById('exec-kpis').innerHTML=`
@@ -868,125 +904,139 @@ function renderExec(){
   mc('ch-rating',{type:'bar',data:{labels:rm.map(m=>m.name),datasets:[{data:rm.map(m=>m.av),backgroundColor:rm.map(m=>m.av>=4?'#1D9E75':m.av>=3?'#EF9F27':'#E24B4A'),borderRadius:3,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:tx,font:{size:11}},grid:{display:false}},y:{min:0,max:5,ticks:{color:tx,stepSize:1},grid:{color:gc}}}}});
 }
 
-/* ═══════════════ ADMIN PAGE ═══════════════ */
+/* ═══════════════════════════════════════
+   ADMIN PAGE
+═══════════════════════════════════════ */
+function toggleOptionsInput(){
+  const v=document.getElementById('new-field-type').value;
+  document.getElementById('options-fi').style.display=v==='select'?'flex':'none';
+}
 function renderAdmin(){
   // Field list
-  const fl=document.getElementById('field-list');
   const allF=[...SYSTEM_FIELDS,...customFields];
-  fl.innerHTML=allF.map(f=>`<div class="field-row">
+  document.getElementById('field-list').innerHTML=allF.map(f=>`<div class="field-row">
     <span class="fi-name">${esc(f.label)}</span>
     <span class="fi-type">${f.type}</span>
-    ${f.required?'<span class="fi-req">Required</span>':''}
     ${f.system?'<span class="fi-system">system field</span>':'<span class="fi-custom">custom</span>'}
-    ${!f.system?`<button class="btn btn-sm btn-del" onclick="removeCustomField('${f.id}')">Remove</button>`:''}
+    ${!f.system?`<button class="btn btn-sm btn-del" onclick="removeCustomField('${f.field_id}')">Remove</button>`:''}
   </div>`).join('');
-
   // User list
-  const ul=document.getElementById('user-mgmt-list');
-  ul.innerHTML=users.map(u=>`<div class="user-row">
+  document.getElementById('user-mgmt-list').innerHTML=users.map(u=>`<div class="user-row">
     <span class="u-name">${esc(u.name)}</span>
-    <span class="u-role role-${u.role}">${u.role}</span>
-    <select onchange="changeUserRole('${u.name}',this.value)" style="height:28px;font-size:11px;padding:2px 6px;">
+    <span class="badge role-${u.role}" style="padding:2px 8px;border-radius:4px;font-size:11px;">${u.role}</span>
+    <select onchange="changeUserRole('${esc(u.name)}',this.value)" style="height:28px;font-size:11px;padding:2px 6px;">
       <option value="admin"${u.role==='admin'?' selected':''}>Admin</option>
       <option value="member"${u.role==='member'?' selected':''}>Member</option>
       <option value="viewer"${u.role==='viewer'?' selected':''}>Viewer</option>
     </select>
-    ${users.length>1?`<button class="btn btn-sm btn-del" onclick="removeUser('${u.name}')">Remove</button>`:''}
+    ${users.length>1?`<button class="btn btn-sm btn-del" onclick="removeUser('${esc(u.name)}')">Remove</button>`:''}
   </div>`).join('');
-
-  // Permissions grid
-  const permsEl=document.getElementById('perms-grid');
+  // Permissions
   const permKeys=['canAdd','canEdit','canDelete','canViewExec','canViewAdmin'];
   const permLabels=['Add tasks','Edit tasks','Delete tasks','View exec dashboard','View admin panel'];
   let pg=`<div class="ph">Permission</div><div class="ph" style="text-align:center">Admin</div><div class="ph" style="text-align:center">Member</div><div class="ph" style="text-align:center">Viewer</div>`;
   permKeys.forEach((k,i)=>{
     pg+=`<div class="pn">${permLabels[i]}</div>`;
     ['admin','member','viewer'].forEach(role=>{
-      pg+=`<input type="checkbox" ${permissions[role][k]?'checked':''} onchange="togglePerm('${role}','${k}',this.checked)">`;
+      pg+=`<input type="checkbox" ${(permissions[role]&&permissions[role][k])?'checked':''} onchange="togglePerm('${role}','${k}',this.checked)">`;
     });
   });
-  permsEl.innerHTML=pg;
-
-  // Owner/assignee lists
+  document.getElementById('perms-grid').innerHTML=pg;
+  // Owner/assignee
   document.getElementById('owner-list').value=taskOwners.join('\n');
   document.getElementById('assignee-list').value=assignees.join('\n');
-
-  // Dropdown for new field type to show/hide options input
-  document.getElementById('new-field-type').onchange=function(){
-    document.getElementById('options-fi').style.display=this.value==='select'?'flex':'none';
-  };
 }
 
-function addCustomField(){
+async function addCustomField(){
   const label=document.getElementById('new-field-label').value.trim();
   const type=document.getElementById('new-field-type').value;
-  const req=document.getElementById('new-field-req').value==='yes';
-  const optStr=document.getElementById('new-field-options').value;
+  const req=false;
+  const optStr=document.getElementById('new-field-options')?document.getElementById('new-field-options').value:'';
   if(!label){alert('Please enter a field label.');return;}
-  const id='custom_'+Date.now();
-  const field={id,label,type,required:req,system:false};
-  if(type==='select'){
-    field.options=optStr.split(',').map(o=>o.trim()).filter(Boolean);
-    if(!field.options.length){alert('Please enter at least one option.');return;}
-  }
-  customFields.push(field);
+  const field_id='cf_'+Date.now();
+  const rec={field_id,label,type,required:req,options:type==='select'?optStr.split(',').map(o=>o.trim()).filter(Boolean):[]};
+  showSaving();
+  const{data,error}=await sb.from('custom_fields').insert([rec]).select();
+  if(error){showToast('Error adding field: '+error.message,true);return;}
+  customFields.push(data[0]);
   document.getElementById('new-field-label').value='';
-  document.getElementById('new-field-options').value='';
-  renderAdmin();
-  render();
-  alert(`Field "${label}" added successfully! It now appears in the Add/Edit Task form and in the main table.`);
-}
-
-function removeCustomField(id){
-  if(!confirm('Remove this custom field? Existing data for this field will be lost.'))return;
-  customFields=customFields.filter(f=>f.id!==id);
+  if(document.getElementById('new-field-options'))document.getElementById('new-field-options').value='';
   renderAdmin();render();
+  showToast(`Field "${label}" added!`);
 }
-
-function changeUserRole(name,role){
-  const u=users.find(x=>x.name===name);
-  if(u){u.role=role;}
-  renderAdmin();
+async function removeCustomField(field_id){
+  if(!confirm('Remove this custom field? Data will be lost.'))return;
+  showSaving();
+  const{error}=await sb.from('custom_fields').delete().eq('field_id',field_id);
+  if(error){showToast('Error removing field',true);return;}
+  customFields=customFields.filter(f=>f.field_id!==field_id);
+  renderAdmin();render();
+  showToast('Field removed.');
 }
-function removeUser(name){
+async function changeUserRole(name,role){
+  showSaving();
+  const{error}=await sb.from('app_users').update({role}).eq('name',name);
+  if(error){showToast('Error updating role',true);return;}
+  const u=users.find(x=>x.name===name);if(u)u.role=role;
+  renderAdmin();showToast(`${name} is now ${role}.`);
+}
+async function removeUser(name){
   if(name===currentUser.name){alert('You cannot remove yourself.');return;}
   if(!confirm(`Remove user "${name}"?`))return;
+  showSaving();
+  const{error}=await sb.from('app_users').delete().eq('name',name);
+  if(error){showToast('Error removing user',true);return;}
   users=users.filter(u=>u.name!==name);
-  renderAdmin();
+  renderAdmin();initLoginUI();
+  showToast(`${name} removed.`);
 }
-function addUser(){
+async function addUser(){
   const name=document.getElementById('nu-name').value.trim();
   const pass=document.getElementById('nu-pass').value.trim();
   const role=document.getElementById('nu-role').value;
   if(!name||!pass){alert('Please fill in name and password.');return;}
   if(users.find(u=>u.name===name)){alert('A user with this name already exists.');return;}
-  users.push({name,role,pass});
-  document.getElementById('nu-name').value='';
-  document.getElementById('nu-pass').value='';
-  renderAdmin();
-  initLogin();
+  showSaving();
+  const{data,error}=await sb.from('app_users').insert([{name,role,pass}]).select();
+  if(error){showToast('Error adding user: '+error.message,true);return;}
+  users.push(data[0]);
+  document.getElementById('nu-name').value='';document.getElementById('nu-pass').value='';
+  renderAdmin();initLoginUI();
+  showToast(`${name} added!`);
 }
-function togglePerm(role,key,val){permissions[role][key]=val;}
-
-function saveOwnerAssigneeLists(){
+async function togglePerm(role,key,val){
+  permissions[role][key]=val;
+  showSaving();
+  await sb.from('settings').upsert({key:'permissions',value:permissions});
+  showToast('Permissions saved.');
+}
+async function saveOwnerAssigneeLists(){
   taskOwners=document.getElementById('owner-list').value.split('\n').map(s=>s.trim()).filter(Boolean);
   assignees=document.getElementById('assignee-list').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  showSaving();
+  await sb.from('settings').upsert([
+    {key:'task_owners',value:taskOwners},
+    {key:'assignees',value:assignees},
+  ]);
   const saved=document.getElementById('oal-saved');
-  saved.style.display='block';setTimeout(()=>saved.style.display='none',2000);
+  saved.style.display='block';setTimeout(()=>saved.style.display='none',2500);
+  showToast('Saved to database!');
 }
 
-/* ═══════════════ CSV EXPORT ═══════════════ */
+/* ═══════════════════════════════════════
+   CSV EXPORT
+═══════════════════════════════════════ */
 function exportCSV(type){
   let rows;
   if(type==='all'){rows=tasks;}
   else{const w=weekWindows()[selWeek];rows=tasks.filter(t=>t.date>=w.start&&t.date<=w.end).sort((a,b)=>a.date<b.date?-1:1);}
   const sysH=['Date','Task','Source','BU / Geography','Priority','Task Owner','Assignee 1','Assignee 2','Client / Internal','Category','Est. Workload','Submission Date','Status','Work Rating','Remarks','Doc Link'];
   const cfH=customFields.map(f=>f.label);
-  const headers=[...sysH,...cfH];
-  const csv=[headers.map(h=>`"${h}"`).join(','),...rows.map(t=>{
-    const sysV=[t.date,t.task,t.source,t.bu,t.priority,t.owner,t.a1,t.a2,t.client,t.category,t.workload,t.submission,t.status,t.rating,t.remarks,t.doc];
-    const cfV=customFields.map(f=>t['cf_'+f.id]||'');
-    return[...sysV,...cfV].map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`).join(',');
+  const csv=[[...sysH,...cfH].map(h=>`"${h}"`).join(','),...rows.map(t=>{
+    const cd=t.custom_data||{};
+    const sv=[t.date,t.task,t.source,t.bu,t.priority,t.owner,t.a1,t.a2,t.client,t.category,t.workload,t.submission,t.status,t.rating,t.remarks,t.doc];
+    const cfv=customFields.map(f=>cd[f.field_id]||'');
+    return[...sv,...cfv].map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`).join(',');
   })].join('\n');
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
@@ -995,7 +1045,7 @@ function exportCSV(type){
 }
 
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
-initLogin();
+boot();
 </script>
 </body>
 </html>
