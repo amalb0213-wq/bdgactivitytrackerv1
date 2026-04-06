@@ -761,7 +761,16 @@ function buildModalForm(taskData){
     } else if(field.type==='assignee_select'){
       html+=`<select id="mf-${field.id}"><option value="">— None —</option>${assignees.map(n=>`<option${n===val?' selected':''}>${n}</option>`).join('')}</select>`;
     } else if(field.type==='rating_select'){
-      html+=`<select id="mf-${field.id}"><option value="">— Not rated —</option>${[1,2,3,4,5].map(n=>`<option value="${n}"${n==val?' selected':''}>${n} ${'★'.repeat(n)}</option>`).join('')}</select>`;
+      // Only admin or the task owner can set rating
+      const canRate=currentUser.role==='admin'||(taskData&&taskData.owner===currentUser.name);
+      if(canRate){
+        html+=`<select id="mf-${field.id}"><option value="">— Not rated —</option>${[1,2,3,4,5].map(n=>`<option value="${n}"${n==val?' selected':''}>${n} ${'★'.repeat(n)}</option>`).join('')}</select>`;
+      } else {
+        const starDisplay=val?('★'.repeat(+val)+'☆'.repeat(5-+val)):'Not rated';
+        html+=`<div style="padding:8px 10px;background:var(--bg2);border-radius:var(--rm);font-size:13px;min-height:34px;color:${val?'#EF9F27':'var(--tx3)'};">${starDisplay}</div>`;
+        html+=`<input type="hidden" id="mf-${field.id}" value="${val||''}">`;
+        html+=`<div style="font-size:10px;color:var(--tx3);margin-top:2px;">Only the task owner or admin can rate</div>`;
+      }
     } else if(field.type==='textarea'){
       html+=`<textarea id="mf-${field.id}" placeholder="${esc(field.label)}…">${esc(String(val||''))}</textarea>`;
     } else if(field.type==='date'){
