@@ -629,7 +629,7 @@ function goPage(p,btn,silent){
 const SYSTEM_FIELDS=[
   {id:'date',label:'Date',type:'date',required:true,system:true},
   {id:'source',label:'Source',type:'text',required:false,system:true},
-  {id:'bu',label:'BU / Geography',type:'text',required:false,system:true},
+  {id:'bu',label:'BU / Geography',type:'select',required:false,system:true,options:['USA','APAC','Middle East','Europe','India GCC']},
   {id:'priority',label:'Priority',type:'select',required:true,system:true,options:['High','Medium','Low']},
   {id:'task',label:'Task',type:'text',required:true,system:true},
   {id:'category',label:'Category',type:'text',required:false,system:true},
