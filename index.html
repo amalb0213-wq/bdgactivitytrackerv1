@@ -218,6 +218,37 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
 .perms-grid input[type=checkbox]{width:15px;height:15px;cursor:pointer;justify-self:center;}
 .saving-indicator{font-size:11px;color:var(--tx3);display:none;}
 .saving-indicator.show{display:inline;}
+/* CAPACITY PLANNING */
+.cap-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:14px;}
+@media(max-width:900px){.cap-grid{grid-template-columns:1fr 1fr;}}
+@media(max-width:560px){.cap-grid{grid-template-columns:1fr;}}
+.cap-card{background:var(--bg1);border:0.5px solid var(--bl);border-radius:var(--rl);padding:16px 18px;}
+.cap-card.fw{grid-column:1/-1;}
+.cap-name{font-size:14px;font-weight:600;margin-bottom:2px;}
+.cap-sub{font-size:11px;color:var(--tx3);margin-bottom:12px;}
+.cap-bar-wrap{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.cap-bar{flex:1;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;}
+.cap-fill{height:100%;border-radius:4px;transition:width .4s;}
+.cap-fill.low{background:#1D9E75;}
+.cap-fill.mid{background:#EF9F27;}
+.cap-fill.high{background:#E24B4A;}
+.cap-days{font-size:12px;font-weight:500;min-width:48px;text-align:right;}
+.cap-tasks{font-size:11px;color:var(--tx2);}
+.cap-week-nav{display:flex;align-items:center;gap:8px;margin-bottom:1rem;flex-wrap:wrap;}
+.cap-week-label{font-size:13px;font-weight:500;min-width:220px;}
+.cap-summary{background:var(--bg1);border:0.5px solid var(--bl);border-radius:var(--rl);padding:14px 16px;margin-bottom:14px;}
+.cap-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+@media(max-width:640px){.cap-summary-grid{grid-template-columns:1fr 1fr;}}
+.cap-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:11px;color:var(--tx2);}
+.cap-legend-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle;}
+.cap-tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px;}
+.cap-tbl th{background:var(--bg2);color:var(--tx2);font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:500;padding:8px 10px;border-bottom:0.5px solid var(--bl);text-align:left;white-space:nowrap;}
+.cap-tbl td{padding:8px 10px;border-bottom:0.5px solid var(--bl);vertical-align:middle;}
+.cap-tbl tr:last-child td{border-bottom:none;}
+.cap-tbl tr:hover td{background:var(--bg2);}
+.overload{color:#E24B4A;font-weight:600;}
+.normal{color:#1D9E75;}
+.cap-avatar{width:30px;height:30px;border-radius:50%;background:var(--accent-bg);color:var(--accent-tx);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;margin-right:8px;flex-shrink:0;}
 /* CHANGE PASSWORD MODAL */
 .pwd-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:400;align-items:center;justify-content:center;padding:1rem;}
 .pwd-modal.open{display:flex;}
@@ -338,7 +369,47 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
   </div>
 </div>
 
-<!-- PAGE 4: ADMIN -->
+<!-- PAGE 4: CAPACITY PLANNING -->
+<div id="page-capacity" class="page">
+  <div class="row-between" style="margin-bottom:1.25rem;">
+    <h2>Capacity planning</h2>
+    <span id="cap-period-label" style="font-size:12px;color:var(--tx3);"></span>
+  </div>
+
+  <!-- Week navigation -->
+  <div class="cap-week-nav">
+    <button class="btn btn-sm" onclick="capWeek(-1)">← Previous week</button>
+    <span class="cap-week-label" id="cap-week-label"></span>
+    <button class="btn btn-sm" onclick="capWeek(1)">Next week →</button>
+    <button class="btn btn-sm" onclick="capWeekOffset=0;renderCapacity()">This week</button>
+    <select id="cap-filter-member" onchange="renderCapacity()" style="height:30px;font-size:12px;">
+      <option value="">All team members</option>
+    </select>
+  </div>
+
+  <!-- Summary stats -->
+  <div class="cap-summary">
+    <div class="cap-summary-grid" id="cap-kpis"></div>
+    <div class="cap-legend">
+      <span><span class="cap-legend-dot" style="background:#1D9E75;"></span>Light (≤3d)</span>
+      <span><span class="cap-legend-dot" style="background:#EF9F27;"></span>Moderate (4–6d)</span>
+      <span><span class="cap-legend-dot" style="background:#E24B4A;"></span>Heavy (7d+)</span>
+    </div>
+  </div>
+
+  <!-- Per-person capacity cards -->
+  <div class="cap-grid" id="cap-cards"></div>
+
+  <!-- Detailed breakdown table -->
+  <div class="table-card">
+    <div style="padding:12px 16px;border-bottom:0.5px solid var(--bl);font-size:13px;font-weight:600;">Task breakdown for this week</div>
+    <div class="table-wrap">
+      <table class="cap-tbl" id="cap-table"></table>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 5: ADMIN -->
 <div id="page-admin" class="page">
   <div class="row-between" style="margin-bottom:1.25rem;">
     <h2>Admin panel</h2>
@@ -602,6 +673,8 @@ function buildNavTabs(){
   <button class="nav-tab" onclick="goPage('recent',this)">Last 5 Working Days</button>`;
   if(perm('canViewExec')||currentUser.role==='admin')
     html+=`<button class="nav-tab" onclick="goPage('exec',this)">Executive Dashboard</button>`;
+  if(perm('canViewExec')||currentUser.role==='admin'||perm('canAdd'))
+    html+=`<button class="nav-tab" onclick="goPage('capacity',this)">Capacity Planning</button>`;
   if(perm('canViewAdmin'))
     html+=`<button class="nav-tab admin-tab" onclick="goPage('admin',this)">Admin</button>`;
   tabs.innerHTML=html;
@@ -619,6 +692,7 @@ function goPage(p,btn,silent){
   if(!silent){
     if(p==='recent')renderRecent();
     if(p==='exec')renderExec();
+    if(p==='capacity')renderCapacity();
     if(p==='admin')renderAdmin();
   }
 }
@@ -1112,6 +1186,146 @@ function exportCSV(type){
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){closeModal();closePwdModal();}
 });
+
+/* ═══════════════════════════════════════
+   CAPACITY PLANNING
+═══════════════════════════════════════ */
+let capWeekOffset=0;
+
+function parseDays(wl){
+  if(!wl)return 0;
+  wl=wl.toString().toLowerCase().trim();
+  const dMatch=wl.match(/([\d.]+)\s*d/);if(dMatch)return parseFloat(dMatch[1]);
+  const hMatch=wl.match(/([\d.]+)\s*h/);if(hMatch)return Math.round(parseFloat(hMatch[1])/8*10)/10;
+  const num=parseFloat(wl);if(!isNaN(num))return num;
+  return 0;
+}
+
+function getCapWeekDays(offset){
+  // Get Mon-Fri of the week at offset from current week
+  const today=new Date();today.setHours(0,0,0,0);
+  const dow=today.getDay();
+  const monday=new Date(today);
+  monday.setDate(today.getDate()-(dow===0?6:dow-1)+(offset*7));
+  const days=[];
+  for(let i=0;i<5;i++){
+    const d=new Date(monday);d.setDate(monday.getDate()+i);
+    days.push(d.toISOString().split('T')[0]);
+  }
+  return days;
+}
+
+function capFillClass(days){
+  if(days<=3)return'low';
+  if(days<=6)return'mid';
+  return'high';
+}
+function capFillColor(days){
+  if(days<=3)return'#1D9E75';
+  if(days<=6)return'#EF9F27';
+  return'#E24B4A';
+}
+
+function renderCapacity(){
+  const days=getCapWeekDays(capWeekOffset);
+  const start=days[0],end=days[4];
+
+  // Week label
+  const fmt=d=>new Date(d+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+  document.getElementById('cap-week-label').textContent=`${fmt(start)} — ${fmt(end)}`;
+  document.getElementById('cap-period-label').textContent=capWeekOffset===0?'Current week':capWeekOffset<0?`${Math.abs(capWeekOffset)} week(s) ago`:`${capWeekOffset} week(s) ahead`;
+
+  // Tasks in this week (by date field)
+  const weekTasks=tasks.filter(t=>t.date&&t.date>=start&&t.date<=end);
+
+  // All names (owners + assignees)
+  const allNames=[...new Set([...taskOwners,...assignees])];
+
+  // Filter member
+  const filterMember=document.getElementById('cap-filter-member').value;
+  const memberSel=document.getElementById('cap-filter-member');
+  memberSel.innerHTML='<option value="">All team members</option>'+allNames.map(n=>`<option${n===filterMember?' selected':''}>${n}</option>`).join('');
+
+  const displayNames=filterMember?[filterMember]:allNames;
+
+  // Per-person data
+  const memberData=displayNames.map(name=>{
+    const myTasks=weekTasks.filter(t=>t.owner===name||t.a1===name||t.a2===name);
+    const totalDays=myTasks.reduce((sum,t)=>sum+parseDays(t.workload),0);
+    const doneTasks=myTasks.filter(t=>t.status==='Done').length;
+    const activeTasks=myTasks.filter(t=>t.status!=='Done').length;
+    const byStatus={};
+    myTasks.forEach(t=>{byStatus[t.status]=(byStatus[t.status]||0)+1;});
+    return{name,tasks:myTasks,totalDays:Math.round(totalDays*10)/10,doneTasks,activeTasks,byStatus};
+  });
+
+  // KPIs
+  const totalTasks=weekTasks.length;
+  const totalDaysAll=memberData.reduce((s,m)=>s+m.totalDays,0);
+  const overloaded=memberData.filter(m=>m.totalDays>5).length;
+  const avgLoad=memberData.length?Math.round(totalDaysAll/memberData.length*10)/10:0;
+  document.getElementById('cap-kpis').innerHTML=`
+    <div class="stat"><div class="stat-label">Tasks this week</div><div class="stat-value">${totalTasks}</div><div class="stat-sub">${start} – ${end}</div></div>
+    <div class="stat"><div class="stat-label">Total workload</div><div class="stat-value">${Math.round(totalDaysAll*10)/10}d</div><div class="stat-sub">across team</div></div>
+    <div class="stat"><div class="stat-label">Avg per person</div><div class="stat-value">${avgLoad}d</div><div class="stat-sub">this week</div></div>
+    <div class="stat"><div class="stat-label">Overloaded</div><div class="stat-value">${overloaded}</div><div class="stat-sub">members &gt;5d</div></div>`;
+
+  // Per-person cards
+  const maxDays=Math.max(...memberData.map(m=>m.totalDays),5);
+  document.getElementById('cap-cards').innerHTML=memberData.map(m=>{
+    const pct=Math.min(Math.round(m.totalDays/maxDays*100),100);
+    const cls=capFillClass(m.totalDays);
+    const initials=m.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+    return`<div class="cap-card">
+      <div style="display:flex;align-items:center;margin-bottom:10px;">
+        <div class="cap-avatar">${initials}</div>
+        <div>
+          <div class="cap-name">${esc(m.name)}</div>
+          <div class="cap-sub">${m.tasks.length} task${m.tasks.length!==1?'s':''} · ${m.activeTasks} active</div>
+        </div>
+      </div>
+      <div class="cap-bar-wrap">
+        <div class="cap-bar"><div class="cap-fill ${cls}" style="width:${pct}%"></div></div>
+        <div class="cap-days ${m.totalDays>5?'overload':''}">${m.totalDays}d</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+        ${Object.entries(m.byStatus).map(([s,c])=>`<span class="badge ${{'Done':'b-done','In progress':'b-inprog','Review':'b-review','To do':'b-todo','Blocked':'b-blocked'}[s]||'b-todo'}" style="font-size:10px;padding:2px 6px;">${s} (${c})</span>`).join('')}
+        ${m.tasks.length===0?'<span style="font-size:11px;color:var(--tx3);">No tasks this week</span>':''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Breakdown table
+  const tbl=document.getElementById('cap-table');
+  const filteredWeekTasks=filterMember
+    ?weekTasks.filter(t=>t.owner===filterMember||t.a1===filterMember||t.a2===filterMember)
+    :weekTasks;
+  if(!filteredWeekTasks.length){
+    tbl.innerHTML=`<thead><tr><th>Date</th><th>Task</th><th>Owner</th><th>Assignees</th><th>Workload</th><th>Status</th><th>Priority</th></tr></thead>
+    <tbody><tr><td colspan="7" class="empty">No tasks logged for this week.</td></tr></tbody>`;
+    return;
+  }
+  const sorted=filteredWeekTasks.slice().sort((a,b)=>a.date<b.date?-1:1);
+  tbl.innerHTML=`<thead><tr>
+    <th>Date</th><th>Task</th><th>Owner</th><th>Assignees</th>
+    <th>Workload (days)</th><th>Status</th><th>Priority</th>
+  </tr></thead><tbody>${sorted.map(t=>{
+    const d=parseDays(t.workload);
+    const assignees2=[t.a1,t.a2].filter(Boolean).join(', ')||'—';
+    return`<tr>
+      <td style="white-space:nowrap">${t.date||'—'}</td>
+      <td class="tc">${esc(t.task)||'—'}</td>
+      <td style="white-space:nowrap">${esc(t.owner)||'—'}</td>
+      <td style="white-space:nowrap;font-size:11px">${esc(assignees2)}</td>
+      <td><span style="font-weight:500;color:${capFillColor(d)}">${d?d+'d':esc(t.workload)||'—'}</span></td>
+      <td>${{'Done':'b-done','In progress':'b-inprog','Review':'b-review','To do':'b-todo','Blocked':'b-blocked'}[t.status]?`<span class="badge ${'Done'===t.status?'b-done':'In progress'===t.status?'b-inprog':'Review'===t.status?'b-review':'To do'===t.status?'b-todo':'b-blocked'}">${t.status}</span>`:t.status||'—'}</td>
+      <td>${pb(t.priority)}</td>
+    </tr>`;
+  }).join('')}</tbody>`;
+}
+
+function capWeek(dir){capWeekOffset+=dir;renderCapacity();}
+
 
 /* ═══════════════════════════════════════
    CHANGE PASSWORD
