@@ -497,6 +497,26 @@ async function loadAll(){
 async function boot(){
   await loadAll();
   document.getElementById('loading-screen').style.display='none';
+  // Restore saved session
+  const saved=localStorage.getItem('at_session');
+  if(saved){
+    try{
+      const sess=JSON.parse(saved);
+      const u=users.find(x=>x.name===sess.name&&x.pass===sess.pass);
+      if(u){
+        currentUser=u;
+        document.getElementById('login-screen').style.display='none';
+        document.getElementById('app').style.display='block';
+        document.getElementById('nav-username').textContent=u.name;
+        const rb=document.getElementById('nav-role-badge');
+        rb.textContent=u.role.charAt(0).toUpperCase()+u.role.slice(1);
+        rb.className='role-badge'+(u.role==='admin'?' admin':'');
+        buildNavTabs();
+        render();
+        return;
+      }
+    }catch(e){localStorage.removeItem('at_session');}
+  }
   document.getElementById('login-screen').style.display='flex';
   initLoginUI();
 }
@@ -530,14 +550,18 @@ async function doLogin(){
   rb.className='role-badge'+(u.role==='admin'?' admin':'');
   buildNavTabs();
   render();
+  // Persist session
+  localStorage.setItem('at_session',JSON.stringify({name:u.name,pass:u.pass}));
 }
 function doLogout(){
   currentUser=null;selectedLoginUser=null;
+  localStorage.removeItem('at_session');
   document.getElementById('login-pass').value='';
   document.getElementById('login-err').style.display='none';
   document.querySelectorAll('.user-badge').forEach(b=>b.classList.remove('sel'));
   document.getElementById('app').style.display='none';
   document.getElementById('login-screen').style.display='flex';
+  initLoginUI();
   goPage('tracker',null,true);
 }
 function buildNavTabs(){
