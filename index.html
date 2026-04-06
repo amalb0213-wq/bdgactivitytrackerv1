@@ -1575,53 +1575,21 @@ function renderCapacity(){
     const pct=Math.min(Math.round(m.totalDays/maxDays*100),100);
     const cls=capFillClass(m.totalDays);
     const initials=m.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
-    const ownedPills=m.ownedTasks.slice(0,3).map(t=>`<span class="cap-task-pill"><span style="color:#0C447C;font-weight:600;">O</span> ${esc((t.task||'').slice(0,22))}${(t.task||'').length>22?'…':''}</span>`).join('');
-    const assignedPills=m.assignedTasks.slice(0,3).map(t=>`<span class="cap-task-pill"><span style="color:#3C3489;font-weight:600;">A</span> ${esc((t.task||'').slice(0,22))}${(t.task||'').length>22?'…':''}</span>`).join('');
-    const extraOwned=m.ownedTasks.length>3?`+${m.ownedTasks.length-3} more owned`:'';
-    const extraAssigned=m.assignedTasks.length>3?`+${m.assignedTasks.length-3} more assigned`:'';
     return`<div class="cap-card">
       <div style="display:flex;align-items:center;margin-bottom:10px;">
         <div class="cap-avatar">${initials}</div>
-        <div style="flex:1;min-width:0;">
+        <div>
           <div class="cap-name">${esc(m.name)}</div>
-          <div class="cap-sub">
-            ${taskOwners.includes(m.name)
-              ?`<span class="cap-owned-tag">Owned: ${m.ownedTasks.length}</span><span class="cap-assigned-tag">Assigned: ${m.assignedTasks.length}</span>`
-              :`<span class="cap-assigned-tag">${m.allTasks.length} task${m.allTasks.length!==1?'s':''}</span>`}
-          </div>
-        </div>
-        <div style="text-align:right;">
-          ${taskOwners.includes(m.name)?`<div style="font-size:11px;color:var(--tx2);">${m.ownedDays}d + ${m.assignedDays}d</div><div style="font-size:10px;color:var(--tx3);">owned + assigned</div>`:`<div style="font-size:11px;color:var(--tx2);">${m.totalDays}d total</div>`}
+          <div class="cap-sub">${m.allTasks.length} task${m.allTasks.length!==1?'s':''} · ${m.activeTasks} active</div>
         </div>
       </div>
       <div class="cap-bar-wrap">
-        <div style="flex:1;">
-          ${taskOwners.includes(m.name)?`
-            <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--bg3);">
-              <div style="width:${m.totalDays?Math.round(m.ownedDays/m.totalDays*pct)+'%':'0%'};background:#185FA5;"></div>
-              <div style="width:${m.totalDays?Math.round(m.assignedDays/m.totalDays*pct)+'%':'0%'};background:#7F77DD;"></div>
-            </div>
-            <div style="display:flex;gap:10px;margin-top:4px;font-size:10px;color:var(--tx3);">
-              <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#185FA5;margin-right:3px;vertical-align:middle;"></span>Owned</span>
-              <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#7F77DD;margin-right:3px;vertical-align:middle;"></span>Assigned</span>
-            </div>`:`
-            <div style="height:8px;border-radius:4px;overflow:hidden;background:var(--bg3);">
-              <div style="width:${pct}%;height:100%;background:#7F77DD;border-radius:4px;"></div>
-            </div>
-            <div style="margin-top:4px;font-size:10px;color:var(--tx3);">
-              <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#7F77DD;margin-right:3px;vertical-align:middle;"></span>Assigned workload</span>
-            </div>`}
-        </div>
+        <div class="cap-bar"><div class="cap-fill ${cls}" style="width:${pct}%"></div></div>
         <div class="cap-days ${m.totalDays>6?'overload':''}">${m.totalDays}d</div>
       </div>
-      <div style="margin-top:10px;border-top:0.5px solid var(--bl);padding-top:8px;">
-        ${m.allTasks.length===0?'<span style="font-size:11px;color:var(--tx3);">No tasks this week</span>':`
-          <div style="flex-wrap:wrap;display:flex;">${taskOwners.includes(m.name)?ownedPills:''}${assignedPills}</div>
-          ${(taskOwners.includes(m.name)&&extraOwned)||extraAssigned?`<div style="font-size:10px;color:var(--tx3);margin-top:4px;">${[taskOwners.includes(m.name)?extraOwned:'',extraAssigned].filter(Boolean).join(' · ')}</div>`:''}
-        `}
-      </div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
         ${Object.entries(m.byStatus).map(([s,c])=>`<span class="badge ${{'Done':'b-done','In progress':'b-inprog','Review':'b-review','To do':'b-todo','Blocked':'b-blocked'}[s]||'b-todo'}" style="font-size:10px;padding:2px 6px;">${s} (${c})</span>`).join('')}
+        ${m.allTasks.length===0?'<span style="font-size:11px;color:var(--tx3);">No tasks this week</span>':''}
       </div>
     </div>`;
   }).join('');
