@@ -218,6 +218,13 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
 .perms-grid input[type=checkbox]{width:15px;height:15px;cursor:pointer;justify-self:center;}
 .saving-indicator{font-size:11px;color:var(--tx3);display:none;}
 .saving-indicator.show{display:inline;}
+/* CHANGE PASSWORD MODAL */
+.pwd-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:400;align-items:center;justify-content:center;padding:1rem;}
+.pwd-modal.open{display:flex;}
+.pwd-card{background:var(--bg1);border-radius:var(--rl);border:0.5px solid var(--bm);width:380px;max-width:100%;padding:1.75rem;}
+.pwd-card h3{font-size:16px;font-weight:600;margin-bottom:1.25rem;}
+.pwd-err{font-size:12px;color:var(--danger);margin-top:-6px;margin-bottom:8px;display:none;}
+.pwd-ok{font-size:12px;color:#1D9E75;margin-top:6px;display:none;}
 </style>
 </head>
 <body>
@@ -262,6 +269,7 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
       <span id="nav-username"></span>
       <span class="role-badge" id="nav-role-badge"></span>
     </div>
+    <button class="btn btn-sm" onclick="openPwdModal()">Change password</button>
     <button class="btn btn-sm" onclick="doLogout()">Sign out</button>
   </div>
 </nav>
@@ -387,6 +395,30 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
       <button class="btn btn-primary btn-sm" onclick="saveOwnerAssigneeLists()">Save changes</button>
       <div id="oal-saved" style="font-size:11px;color:#1D9E75;margin-top:6px;display:none;">✓ Saved to database</div>
     </div>
+  </div>
+</div>
+<!-- CHANGE PASSWORD MODAL -->
+<div class="pwd-modal" id="pwd-modal" onclick="closePwdOnBg(event)">
+  <div class="pwd-card">
+    <h3>Change password</h3>
+    <div class="lf">
+      <label>Current password</label>
+      <input type="password" id="pwd-current" placeholder="Enter current password">
+    </div>
+    <div class="lf">
+      <label>New password</label>
+      <input type="password" id="pwd-new" placeholder="Enter new password">
+    </div>
+    <div class="lf">
+      <label>Confirm new password</label>
+      <input type="password" id="pwd-confirm" placeholder="Re-enter new password" onkeydown="if(event.key==='Enter')submitPwdChange()">
+    </div>
+    <div class="pwd-err" id="pwd-err"></div>
+    <div class="mf" style="margin-top:1rem;padding-top:1rem;border-top:0.5px solid var(--bl);">
+      <button class="btn" onclick="closePwdModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitPwdChange()">Update password</button>
+    </div>
+    <div class="pwd-ok" id="pwd-ok">✓ Password updated successfully!</div>
   </div>
 </div>
 </div><!-- end #app -->
@@ -1068,7 +1100,66 @@ function exportCSV(type){
   a.click();
 }
 
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){closeModal();closePwdModal();}
+});
+
+/* ═══════════════════════════════════════
+   CHANGE PASSWORD
+═══════════════════════════════════════ */
+function openPwdModal(){
+  document.getElementById('pwd-current').value='';
+  document.getElementById('pwd-new').value='';
+  document.getElementById('pwd-confirm').value='';
+  document.getElementById('pwd-err').style.display='none';
+  document.getElementById('pwd-ok').style.display='none';
+  document.getElementById('pwd-modal').classList.add('open');
+}
+function closePwdModal(){document.getElementById('pwd-modal').classList.remove('open');}
+function closePwdOnBg(e){if(e.target===document.getElementById('pwd-modal'))closePwdModal();}
+
+async function submitPwdChange(){
+  const current=document.getElementById('pwd-current').value;
+  const newPwd=document.getElementById('pwd-new').value;
+  const confirm=document.getElementById('pwd-confirm').value;
+  const errEl=document.getElementById('pwd-err');
+  const okEl=document.getElementById('pwd-ok');
+  errEl.style.display='none';
+  okEl.style.display='none';
+
+  // Validate
+  if(!current||!newPwd||!confirm){
+    errEl.textContent='Please fill in all fields.';errEl.style.display='block';return;
+  }
+  if(current!==currentUser.pass){
+    errEl.textContent='Current password is incorrect.';errEl.style.display='block';return;
+  }
+  if(newPwd.length<4){
+    errEl.textContent='New password must be at least 4 characters.';errEl.style.display='block';return;
+  }
+  if(newPwd!==confirm){
+    errEl.textContent='New passwords do not match.';errEl.style.display='block';return;
+  }
+  if(newPwd===current){
+    errEl.textContent='New password must be different from current password.';errEl.style.display='block';return;
+  }
+
+  showSaving();
+  const{error}=await sb.from('app_users').update({pass:newPwd}).eq('name',currentUser.name);
+  if(error){errEl.textContent='Error updating password: '+error.message;errEl.style.display='block';return;}
+
+  // Update local state
+  currentUser.pass=newPwd;
+  const u=users.find(x=>x.name===currentUser.name);
+  if(u)u.pass=newPwd;
+  // Update saved session
+  localStorage.setItem('at_session',JSON.stringify({name:currentUser.name,pass:newPwd}));
+
+  okEl.style.display='block';
+  showToast('Password updated successfully!');
+  setTimeout(()=>closePwdModal(),2000);
+}
+
 boot();
 </script>
 </body>
