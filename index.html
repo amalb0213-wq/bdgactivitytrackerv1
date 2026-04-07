@@ -6,6 +6,7 @@
 <title>Team Activity Tracker</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -521,6 +522,7 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
       <div style="font-size:13px;font-weight:500;margin-bottom:10px;">Add new user</div>
       <div class="add-user-form">
         <div class="fi"><label>Name</label><input type="text" id="nu-name" placeholder="Full name"></div>
+        <div class="fi"><label>Email</label><input type="text" id="nu-email" placeholder="email@example.com"></div>
         <div class="fi"><label>Password</label><input type="text" id="nu-pass" placeholder="Password"></div>
         <div class="fi"><label>Role</label>
           <select id="nu-role"><option value="member">Member</option><option value="viewer">Viewer</option><option value="admin">Admin</option></select>
@@ -588,6 +590,51 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
 const SUPABASE_URL = 'https://zcjvwgudfbtadtpaftar.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_fBXi7rjsECu_XozI9helWQ_sdfZndAI';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* ═══════════════════════════════════════
+   EMAILJS CONFIG
+═══════════════════════════════════════ */
+const EJS_SERVICE  = 'service_hkgpi09';
+const EJS_TEMPLATE = 'template_8bsk0uh';
+const EJS_KEY      = '9dvxUn7732S6Qc1Hm';
+
+async function sendTaskEmail(rec, isNew){
+  // Only send on new task creation, not edits
+  if(!isNew) return;
+
+  // Collect all assignees who have an email in users table
+  const recipientNames=[rec.a1, rec.a2].filter(Boolean);
+  if(!recipientNames.length) return;
+
+  // Find email addresses from users list (users may not have emails — fallback gracefully)
+  for(const name of recipientNames){
+    const u=users.find(x=>x.name===name);
+    const toEmail=u&&u.email?u.email:null;
+    if(!toEmail){
+      console.log(`No email found for ${name} — skipping notification`);
+      continue;
+    }
+    try{
+      await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
+        to_email:      toEmail,
+        assignee_name: name,
+        task_name:     rec.task||'—',
+        category:      rec.category||'—',
+        priority:      rec.priority||'—',
+        owner:         rec.owner||'—',
+        submission_date: rec.submission||'—',
+        status:        rec.status||'—',
+        workload:      rec.workload||'—',
+        bu:            rec.bu||'—',
+        remarks:       rec.remarks||'—',
+        sender_name:   currentUser?currentUser.name:'Activity Tracker',
+      }, EJS_KEY);
+      console.log(`Email sent to ${name} (${toEmail})`);
+    } catch(err){
+      console.error(`Email failed for ${name}:`, err);
+    }
+  }
+}
 
 /* ═══════════════════════════════════════
    STATE
@@ -673,6 +720,7 @@ async function loadAll(){
    BOOT
 ═══════════════════════════════════════ */
 async function boot(){
+  emailjs.init(EJS_KEY);
   await loadAll();
   document.getElementById('loading-screen').style.display='none';
   // Restore saved session
@@ -997,7 +1045,8 @@ async function saveTask(){
     if(tr.data)tasks=tr.data;
     closeModal();
     render();
-    showToast(editId?'Task updated!':'Task added!');
+    showToast(editId?'Task updated!':'Task added! Notifying assignees…');
+    if(!editId) sendTaskEmail(rec, true);
   }catch(e){
     console.error('Save error:',e);
     showToast('Error saving task: '+e.message,true);
@@ -1293,6 +1342,19 @@ function toggleOptionsInput(){
   const v=document.getElementById('new-field-type').value;
   document.getElementById('options-fi').style.display=v==='select'?'flex':'none';
 }
+async function editUserEmail(name){
+  const u=users.find(x=>x.name===name);
+  const current=u&&u.email?u.email:'';
+  const newEmail=prompt(`Enter email address for ${name}:`, current);
+  if(newEmail===null) return; // cancelled
+  showSaving();
+  const{error}=await sb.from('app_users').update({email:newEmail||null}).eq('name',name);
+  if(error){showToast('Error updating email',true);return;}
+  if(u)u.email=newEmail||null;
+  renderAdmin();
+  showToast(`Email updated for ${name}`);
+}
+
 function renderAdmin(){
   // Field list
   const allF=[...SYSTEM_FIELDS,...customFields];
@@ -1305,12 +1367,14 @@ function renderAdmin(){
   // User list
   document.getElementById('user-mgmt-list').innerHTML=users.map(u=>`<div class="user-row">
     <span class="u-name">${esc(u.name)}</span>
+    <span style="font-size:11px;color:var(--tx2);">${u.email?esc(u.email):'<span style="color:var(--tx3);font-style:italic;">no email</span>'}</span>
     <span class="badge role-${u.role}" style="padding:2px 8px;border-radius:4px;font-size:11px;">${u.role}</span>
     <select onchange="changeUserRole('${esc(u.name)}',this.value)" style="height:28px;font-size:11px;padding:2px 6px;">
       <option value="admin"${u.role==='admin'?' selected':''}>Admin</option>
       <option value="member"${u.role==='member'?' selected':''}>Member</option>
       <option value="viewer"${u.role==='viewer'?' selected':''}>Viewer</option>
     </select>
+    <button class="btn btn-sm" onclick="editUserEmail('${esc(u.name)}')" style="font-size:10px;">✉ Email</button>
     ${users.length>1?`<button class="btn btn-sm btn-del" onclick="removeUser('${esc(u.name)}')">Remove</button>`:''}
   </div>`).join('');
   // Permissions
@@ -1379,10 +1443,13 @@ async function addUser(){
   if(!name||!pass){alert('Please fill in name and password.');return;}
   if(users.find(u=>u.name===name)){alert('A user with this name already exists.');return;}
   showSaving();
-  const{data,error}=await sb.from('app_users').insert([{name,role,pass}]).select();
+  const email=document.getElementById('nu-email').value.trim();
+  const{data,error}=await sb.from('app_users').insert([{name,role,pass,email:email||null}]).select();
   if(error){showToast('Error adding user: '+error.message,true);return;}
   users.push(data[0]);
-  document.getElementById('nu-name').value='';document.getElementById('nu-pass').value='';
+  document.getElementById('nu-name').value='';
+  document.getElementById('nu-email').value='';
+  document.getElementById('nu-pass').value='';
   renderAdmin();initLoginUI();
   showToast(`${name} added!`);
 }
