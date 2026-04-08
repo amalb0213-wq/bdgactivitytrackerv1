@@ -250,24 +250,6 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
 .overload{color:#E24B4A;font-weight:600;}
 .normal{color:#1D9E75;}
 .cap-avatar{width:30px;height:30px;border-radius:50%;background:var(--accent-bg);color:var(--accent-tx);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;margin-right:8px;flex-shrink:0;}
-/* CSV UPLOAD */
-.upload-zone{border:2px dashed var(--bm);border-radius:var(--rl);padding:2rem;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg2);position:relative;}
-.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:var(--accent-bg);}
-.upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
-.upload-icon{font-size:32px;margin-bottom:8px;}
-.upload-title{font-size:14px;font-weight:600;color:var(--tx1);margin-bottom:4px;}
-.upload-hint{font-size:12px;color:var(--tx3);}
-.upload-preview{margin-top:1rem;border:0.5px solid var(--bl);border-radius:var(--rm);overflow:hidden;max-height:260px;overflow-y:auto;}
-.upload-preview table{width:100%;border-collapse:collapse;font-size:11px;min-width:600px;}
-.upload-preview thead th{background:var(--bg2);padding:6px 8px;text-align:left;font-weight:500;color:var(--tx2);border-bottom:0.5px solid var(--bl);white-space:nowrap;}
-.upload-preview tbody td{padding:6px 8px;border-bottom:0.5px solid var(--bl);color:var(--tx1);}
-.upload-preview tbody tr:last-child td{border-bottom:none;}
-.upload-stats{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:12px;}
-.upload-stat{padding:4px 10px;border-radius:4px;background:var(--bg2);}
-.upload-stat .us-num{font-weight:600;color:var(--tx1);}
-.upload-stat .us-lbl{color:var(--tx3);}
-.upload-err-row{background:#FCEBEB!important;}
-@media(prefers-color-scheme:dark){.upload-err-row{background:#501313!important;}}
 /* CAPACITY EXTRAS */
 .cap-owned-tag{font-size:10px;padding:1px 5px;border-radius:3px;background:#E6F1FB;color:#0C447C;margin-left:4px;font-weight:500;}
 .cap-assigned-tag{font-size:10px;padding:1px 5px;border-radius:3px;background:#EEEDFE;color:#3C3489;margin-left:4px;font-weight:500;}
@@ -353,10 +335,7 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
 <div id="page-tracker" class="page active">
   <div class="row-between">
     <div class="row-left"><h2>All tasks</h2><span id="rec-count"></span></div>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <button class="btn btn-sm" id="btn-upload-csv" onclick="openUploadModal()" title="Import tasks from CSV">↑ Import CSV</button>
-      <button class="btn btn-primary" id="btn-add-task" onclick="openModal()">+ Add task</button>
-    </div>
+    <button class="btn btn-primary" id="btn-add-task" onclick="openModal()">+ Add task</button>
   </div>
   <div class="stat-grid" id="stat-row"></div>
   <div class="filter-card">
@@ -591,34 +570,6 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
   </div>
 </div>
 </div><!-- end #app -->
-
-<!-- CSV UPLOAD MODAL -->
-<div class="mo" id="upload-modal" onclick="closeUploadOnBg(event)">
-  <div class="modal" style="width:820px;">
-    <div class="mt">Import tasks from CSV</div>
-    <div class="upload-zone" id="upload-zone"
-      ondragover="event.preventDefault();this.classList.add('drag')"
-      ondragleave="this.classList.remove('drag')"
-      ondrop="handleDrop(event)">
-      <input type="file" id="csv-file-input" accept=".csv" onchange="handleFileSelect(event)">
-      <div class="upload-icon">📂</div>
-      <div class="upload-title">Drop your CSV file here or click to browse</div>
-      <div class="upload-hint">Download the dummy CSV below to see the required format</div>
-    </div>
-    <div id="upload-preview-area" style="display:none;">
-      <div class="upload-stats" id="upload-stats"></div>
-      <div class="upload-preview" id="upload-preview"></div>
-      <div id="upload-errors" style="font-size:12px;color:#A32D2D;margin-top:8px;display:none;"></div>
-    </div>
-    <div class="mf" style="justify-content:space-between;">
-      <button class="btn btn-sm" onclick="downloadDummyCSV()">↓ Download dummy CSV</button>
-      <div style="display:flex;gap:8px;">
-        <button class="btn" onclick="closeUploadModal()">Cancel</button>
-        <button class="btn btn-primary" id="upload-confirm-btn" style="display:none;" onclick="confirmImport()">Import tasks</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- TASK MODAL -->
 <div class="mo" id="modal-overlay" onclick="closeOnBg(event)">
@@ -1548,213 +1499,8 @@ function exportCSV(type){
   a.click();
 }
 
-/* ═══════════════════════════════════════
-   CSV IMPORT
-═══════════════════════════════════════ */
-const CSV_HEADERS=['Date','Task','Source','BU / Geography','Priority','Task Owner','Task Assignee 1','Task Assignee 2','Client / Internal','Category','Est. Workload','Submission Date','Status','Work Rating','Remarks','Doc Link'];
-const CSV_FIELD_MAP={
-  'Date':'date','Task':'task','Source':'source','BU / Geography':'bu',
-  'Priority':'priority','Task Owner':'owner','Task Assignee 1':'a1',
-  'Task Assignee 2':'a2','Client / Internal':'client','Category':'category',
-  'Est. Workload':'workload','Submission Date':'submission','Status':'status',
-  'Work Rating':'rating','Remarks':'remarks','Doc Link':'doc'
-};
-
-let parsedCSVRows=[];
-
-function openUploadModal(){
-  parsedCSVRows=[];
-  document.getElementById('csv-file-input').value='';
-  document.getElementById('upload-preview-area').style.display='none';
-  document.getElementById('upload-confirm-btn').style.display='none';
-  document.getElementById('upload-zone').classList.remove('drag');
-  document.getElementById('upload-modal').classList.add('open');
-}
-function closeUploadModal(){document.getElementById('upload-modal').classList.remove('open');}
-function closeUploadOnBg(e){if(e.target===document.getElementById('upload-modal'))closeUploadModal();}
-
-function handleDrop(e){
-  e.preventDefault();
-  document.getElementById('upload-zone').classList.remove('drag');
-  const file=e.dataTransfer.files[0];
-  if(file&&file.name.endsWith('.csv'))processCSVFile(file);
-  else showToast('Please drop a .csv file',true);
-}
-function handleFileSelect(e){
-  const file=e.target.files[0];
-  if(file)processCSVFile(file);
-}
-
-function parseCSV(text){
-  const lines=text.split(/
-?
-/).filter(l=>l.trim());
-  if(!lines.length)return{headers:[],rows:[]};
-  // Parse header
-  const headers=parseCSVLine(lines[0]);
-  const rows=[];
-  for(let i=1;i<lines.length;i++){
-    if(!lines[i].trim())continue;
-    const vals=parseCSVLine(lines[i]);
-    const row={};
-    headers.forEach((h,idx)=>row[h]=(vals[idx]||'').trim());
-    rows.push(row);
-  }
-  return{headers,rows};
-}
-
-function parseCSVLine(line){
-  const result=[];let cur='';let inQuote=false;
-  for(let i=0;i<line.length;i++){
-    const ch=line[i];
-    if(ch==='"'){
-      if(inQuote&&line[i+1]==='"'){cur+='"';i++;}
-      else inQuote=!inQuote;
-    } else if(ch===','&&!inQuote){result.push(cur);cur='';}
-    else cur+=ch;
-  }
-  result.push(cur);
-  return result;
-}
-
-function processCSVFile(file){
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const text=e.target.result;
-    const{headers,rows}=parseCSV(text);
-
-    // Validate headers
-    const missing=CSV_HEADERS.filter(h=>!headers.includes(h)&&h!=='Doc Link'&&h!=='Work Rating'&&h!=='Remarks');
-    const errEl=document.getElementById('upload-errors');
-
-    // Map rows to task records
-    parsedCSVRows=rows.map((row,i)=>{
-      const rec={custom_data:{}};
-      const rowErrors=[];
-      CSV_HEADERS.forEach(h=>{
-        const field=CSV_FIELD_MAP[h];
-        if(field)rec[field]=(row[h]||'').trim();
-      });
-      // Validate required fields
-      if(!rec.task)rowErrors.push('Task is required');
-      if(!rec.date)rowErrors.push('Date is required');
-      // Validate priority
-      if(rec.priority&&!['High','Medium','Low'].includes(rec.priority))
-        rowErrors.push(`Invalid priority: "${rec.priority}"`);
-      // Validate status
-      if(rec.status&&!['To do','In progress','Review','Done','Blocked'].includes(rec.status))
-        rowErrors.push(`Invalid status: "${rec.status}"`);
-      rec._rowIndex=i+2; // CSV row number (1-indexed + header)
-      rec._errors=rowErrors;
-      rec._valid=rowErrors.length===0;
-      return rec;
-    });
-
-    const validCount=parsedCSVRows.filter(r=>r._valid).length;
-    const errorCount=parsedCSVRows.filter(r=>!r._valid).length;
-
-    // Show stats
-    document.getElementById('upload-stats').innerHTML=`
-      <div class="upload-stat"><span class="us-num">${parsedCSVRows.length}</span> <span class="us-lbl">rows found</span></div>
-      <div class="upload-stat"><span class="us-num" style="color:#1D9E75">${validCount}</span> <span class="us-lbl">ready to import</span></div>
-      ${errorCount?`<div class="upload-stat"><span class="us-num" style="color:#E24B4A">${errorCount}</span> <span class="us-lbl">rows with errors</span></div>`:''}`;
-
-    // Show preview table (first 10 rows)
-    const preview=parsedCSVRows.slice(0,10);
-    const previewHTML=`<table>
-      <thead><tr>
-        <th>Row</th><th>Date</th><th>Task</th><th>Owner</th><th>Priority</th>
-        <th>Status</th><th>Category</th><th>Workload</th><th>Validation</th>
-      </tr></thead>
-      <tbody>${preview.map(r=>`<tr class="${r._valid?'':'upload-err-row'}">
-        <td>${r._rowIndex}</td>
-        <td style="white-space:nowrap">${r.date||'—'}</td>
-        <td style="max-width:180px;white-space:normal">${r.task||'—'}</td>
-        <td>${r.owner||'—'}</td>
-        <td>${r.priority||'—'}</td>
-        <td>${r.status||'—'}</td>
-        <td>${r.category||'—'}</td>
-        <td>${r.workload||'—'}</td>
-        <td>${r._valid?'<span style="color:#1D9E75">✓ OK</span>':'<span style="color:#E24B4A">✗ '+r._errors.join(', ')+'</span>'}</td>
-      </tr>`).join('')}
-      ${parsedCSVRows.length>10?`<tr><td colspan="9" style="text-align:center;padding:8px;color:var(--tx3);font-style:italic;">...and ${parsedCSVRows.length-10} more rows</td></tr>`:''}
-      </tbody></table>`;
-
-    document.getElementById('upload-preview').innerHTML=previewHTML;
-    document.getElementById('upload-preview-area').style.display='block';
-
-    if(errorCount>0){
-      const allErrors=parsedCSVRows.filter(r=>!r._valid).map(r=>`Row ${r._rowIndex}: ${r._errors.join(', ')}`);
-      errEl.innerHTML='⚠ Errors found (these rows will be skipped):<br>'+allErrors.join('<br>');
-      errEl.style.display='block';
-    } else {
-      errEl.style.display='none';
-    }
-
-    if(validCount>0){
-      document.getElementById('upload-confirm-btn').style.display='';
-      document.getElementById('upload-confirm-btn').textContent=`Import ${validCount} task${validCount!==1?'s':''}`;
-    } else {
-      document.getElementById('upload-confirm-btn').style.display='none';
-    }
-  };
-  reader.readAsText(file);
-}
-
-async function confirmImport(){
-  const validRows=parsedCSVRows.filter(r=>r._valid).map(r=>{
-    const rec={};
-    ['date','task','source','bu','priority','owner','a1','a2','client','category','workload','submission','status','rating','remarks','doc'].forEach(f=>{
-      rec[f]=r[f]||null;
-    });
-    rec.custom_data={};
-    return rec;
-  });
-  if(!validRows.length){showToast('No valid rows to import',true);return;}
-  showSaving();
-  document.getElementById('upload-confirm-btn').textContent='Importing…';
-  document.getElementById('upload-confirm-btn').disabled=true;
-  try{
-    const{error}=await sb.from('tasks').insert(validRows);
-    if(error)throw error;
-    // Refresh tasks
-    const tr=await sb.from('tasks').select('*').order('created_at',{ascending:false});
-    if(tr.data)tasks=tr.data;
-    closeUploadModal();
-    render();
-    showToast(`✓ ${validRows.length} task${validRows.length!==1?'s':''} imported successfully!`);
-  }catch(e){
-    showToast('Import failed: '+e.message,true);
-    document.getElementById('upload-confirm-btn').textContent=`Import ${validRows.length} tasks`;
-    document.getElementById('upload-confirm-btn').disabled=false;
-  }
-}
-
-function downloadDummyCSV(){
-  const rows=[
-    CSV_HEADERS,
-    ['2026-04-07','Prepare APAC proposal','Email','APAC','High','Amal','Vivek','Edwin','Client','Proposal','2d','2026-04-10','In progress','','Follow up with client after submission',''],
-    ['2026-04-07','Q2 capability deck update','Slack','India GCC','Medium','Sreejith','Abhilash','','Internal','Capability Deck','1d','2026-04-09','To do','','Include new service offerings',''],
-    ['2026-04-08','RFP response for Europe deal','Email','Europe','High','Amal','Naseef','Aishwariya','Client','RFP','3d','2026-04-14','In progress','','Coordinate with legal team','https://docs.google.com/'],
-    ['2026-04-08','SOW review for Middle East client','Meeting','Middle East','High','Sreejith','Vishnu','','Client','SOW/MSA','1d','2026-04-09','Review','4','Awaiting client sign-off',''],
-    ['2026-04-08','New inbound lead follow-up','Inbound','USA','Medium','Amal','Edwin','','Client','Inbound Lead','0.5d','2026-04-08','Done','5','Responded within SLA',''],
-    ['2026-04-09','Invoice for March services','Email','India GCC','Low','Sreejith','Aggie','','Internal','Invoicing','0.5d','2026-04-09','Done','5','All invoices sent',''],
-    ['2026-04-09','Pitch deck for USA enterprise client','Slack','USA','High','Amal','Haritha','Vivek','Client','Pitch Deck','2d','2026-04-11','In progress','','Need design review',''],
-    ['2026-04-10','Internal team process update','Meeting','India GCC','Low','Sreejith','Abhilash','Aggie','Internal','Others','1d','2026-04-10','To do','','Quarterly process review',''],
-    ['2026-04-10','APAC client onboarding proposal','Email','APAC','High','Amal','Naseef','','Client','Proposal','2d','2026-04-14','To do','','New enterprise account',''],
-    ['2026-04-11','GCC capability presentation','Slack','Middle East','Medium','Sreejith','Vishnu','Edwin','Client','Capability Deck','1.5d','2026-04-12','To do','','Virtual presentation scheduled',''],
-  ];
-  const csv=rows.map(r=>r.map(v=>`"${(v||'').replace(/"/g,'""')}"`).join(',')).join('
-');
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-  a.download='activity_tracker_template.csv';
-  a.click();
-  showToast('Dummy CSV downloaded!');
-}
-
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){closeModal();closePwdModal();closeUploadModal();}
+  if(e.key==='Escape'){closeModal();closePwdModal();}
 });
 
 /* ═══════════════════════════════════════
