@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Team Activity Tracker</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -250,6 +249,24 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
 .overload{color:#E24B4A;font-weight:600;}
 .normal{color:#1D9E75;}
 .cap-avatar{width:30px;height:30px;border-radius:50%;background:var(--accent-bg);color:var(--accent-tx);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;margin-right:8px;flex-shrink:0;}
+/* CSV UPLOAD */
+.upload-zone{border:2px dashed var(--bm);border-radius:var(--rl);padding:2rem;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg2);position:relative;}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:var(--accent-bg);}
+.upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-icon{font-size:32px;margin-bottom:8px;}
+.upload-title{font-size:14px;font-weight:600;color:var(--tx1);margin-bottom:4px;}
+.upload-hint{font-size:12px;color:var(--tx3);}
+.upload-preview{margin-top:1rem;border:0.5px solid var(--bl);border-radius:var(--rm);overflow:hidden;max-height:260px;overflow-y:auto;}
+.upload-preview table{width:100%;border-collapse:collapse;font-size:11px;min-width:600px;}
+.upload-preview thead th{background:var(--bg2);padding:6px 8px;text-align:left;font-weight:500;color:var(--tx2);border-bottom:0.5px solid var(--bl);white-space:nowrap;}
+.upload-preview tbody td{padding:6px 8px;border-bottom:0.5px solid var(--bl);color:var(--tx1);}
+.upload-preview tbody tr:last-child td{border-bottom:none;}
+.upload-stats{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:12px;}
+.upload-stat{padding:4px 10px;border-radius:4px;background:var(--bg2);}
+.upload-stat .us-num{font-weight:600;color:var(--tx1);}
+.upload-stat .us-lbl{color:var(--tx3);}
+.upload-err-row{background:#FCEBEB!important;}
+@media(prefers-color-scheme:dark){.upload-err-row{background:#501313!important;}}
 /* CAPACITY EXTRAS */
 .cap-owned-tag{font-size:10px;padding:1px 5px;border-radius:3px;background:#E6F1FB;color:#0C447C;margin-left:4px;font-weight:500;}
 .cap-assigned-tag{font-size:10px;padding:1px 5px;border-radius:3px;background:#EEEDFE;color:#3C3489;margin-left:4px;font-weight:500;}
@@ -335,7 +352,10 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
 <div id="page-tracker" class="page active">
   <div class="row-between">
     <div class="row-left"><h2>All tasks</h2><span id="rec-count"></span></div>
-    <button class="btn btn-primary" id="btn-add-task" onclick="openModal()">+ Add task</button>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn btn-sm" id="btn-upload-csv" onclick="openUploadModal()" title="Import tasks from CSV">↑ Import CSV</button>
+      <button class="btn btn-primary" id="btn-add-task" onclick="openModal()">+ Add task</button>
+    </div>
   </div>
   <div class="stat-grid" id="stat-row"></div>
   <div class="filter-card">
@@ -571,6 +591,34 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
 </div>
 </div><!-- end #app -->
 
+<!-- CSV UPLOAD MODAL -->
+<div class="mo" id="upload-modal" onclick="closeUploadOnBg(event)">
+  <div class="modal" style="width:820px;">
+    <div class="mt">Import tasks from CSV</div>
+    <div class="upload-zone" id="upload-zone"
+      ondragover="event.preventDefault();this.classList.add('drag')"
+      ondragleave="this.classList.remove('drag')"
+      ondrop="handleDrop(event)">
+      <input type="file" id="csv-file-input" accept=".csv" onchange="handleFileSelect(event)">
+      <div class="upload-icon">📂</div>
+      <div class="upload-title">Drop your CSV file here or click to browse</div>
+      <div class="upload-hint">Download the dummy CSV below to see the required format</div>
+    </div>
+    <div id="upload-preview-area" style="display:none;">
+      <div class="upload-stats" id="upload-stats"></div>
+      <div class="upload-preview" id="upload-preview"></div>
+      <div id="upload-errors" style="font-size:12px;color:#A32D2D;margin-top:8px;display:none;"></div>
+    </div>
+    <div class="mf" style="justify-content:space-between;">
+      <button class="btn btn-sm" onclick="downloadDummyCSV()">↓ Download dummy CSV</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="closeUploadModal()">Cancel</button>
+        <button class="btn btn-primary" id="upload-confirm-btn" style="display:none;" onclick="confirmImport()">Import tasks</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- TASK MODAL -->
 <div class="mo" id="modal-overlay" onclick="closeOnBg(event)">
   <div class="modal">
@@ -588,8 +636,15 @@ td.rc{max-width:160px;white-space:normal;line-height:1.4;font-size:11px;color:va
    SUPABASE CONFIG
 ═══════════════════════════════════════ */
 const SUPABASE_URL = 'https://zcjvwgudfbtadtpaftar.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_fBXi7rjsECu_XozI9helWQ_sdfZndAI';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjanZ3Z3VkZmJ0YWR0cGFmdGFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMzA5OTQsImV4cCI6MjA5MDcwNjk5NH0.rJUAunjog0v0WHBJXlm6Wfddf3qwBFJSL30n6IM00ac';
+/* ── Pure fetch-based Supabase REST helper ── */
+const SB_HEADERS = {
+  'apikey': SUPABASE_KEY,
+  'Authorization': 'Bearer ' + SUPABASE_KEY,
+  'Content-Type': 'application/json',
+  'Prefer': 'return=representation'
+};
+
 
 /* ═══════════════════════════════════════
    EMAILJS CONFIG
@@ -691,28 +746,40 @@ function weekWindows(){
 /* ═══════════════════════════════════════
    DATABASE — LOAD ALL DATA
 ═══════════════════════════════════════ */
+async function sbFetch(path){
+  const r=await fetch(SUPABASE_URL+'/rest/v1/'+path,{headers:SB_HEADERS});
+  const text=await r.text();
+  let data;
+  try{data=JSON.parse(text);}catch(e){data=text;}
+  if(!r.ok){
+    const msg=typeof data==='object'?(data.message||data.hint||data.details||JSON.stringify(data)):text;
+    throw new Error(`[${path}] HTTP ${r.status}: ${msg}`);
+  }
+  if(!Array.isArray(data)){
+    throw new Error(`[${path}] Expected array, got: ${JSON.stringify(data).slice(0,100)}`);
+  }
+  return data;
+}
+
 async function loadAll(){
   try{
-    const [tr,ur,cr,sr]=await Promise.all([
-      sb.from('tasks').select('*').order('created_at',{ascending:false}),
-      sb.from('app_users').select('*').order('name'),
-      sb.from('custom_fields').select('*').order('created_at'),
-      sb.from('settings').select('*'),
+    const [tasksData,usersData,cfData,settingsData]=await Promise.all([
+      sbFetch('tasks?order=created_at.desc'),
+      sbFetch('app_users?order=name.asc'),
+      sbFetch('custom_fields?order=created_at.asc'),
+      sbFetch('settings'),
     ]);
-    if(tr.error)throw tr.error;
-    if(ur.error)throw ur.error;
-    tasks=tr.data||[];
-    users=ur.data||[];
-    customFields=(cr.data||[]).map(f=>({...f,options:f.options||[]}));
-    // Parse settings
-    (sr.data||[]).forEach(row=>{
+    tasks=tasksData;
+    users=usersData;
+    customFields=cfData.map(f=>({...f,options:f.options||[]}));
+    settingsData.forEach(row=>{
       if(row.key==='task_owners')taskOwners=row.value;
       if(row.key==='assignees')assignees=row.value;
       if(row.key==='permissions')permissions=row.value;
     });
   }catch(e){
     console.error('Load error:',e);
-    showToast('Failed to load data. Check your connection.',true);
+    throw e;
   }
 }
 
@@ -720,8 +787,43 @@ async function loadAll(){
    BOOT
 ═══════════════════════════════════════ */
 async function boot(){
-  emailjs.init(EJS_KEY);
-  await loadAll();
+  try{ emailjs.init(EJS_KEY); }catch(e){ console.warn('EmailJS init failed:', e); }
+
+  // Show loading status steps
+  const ls=document.getElementById('loading-screen');
+  ls.innerHTML=`<div class="spinner"></div><div class="loading-text" id="load-status">Connecting to database…</div>`;
+
+  try{
+    // Step 1 - check if Supabase is reachable
+    document.getElementById('load-status').textContent='Checking database…';
+    await loadAll();
+  }catch(e){
+    console.error('Boot error:', e);
+    const msg=e.message||'Unknown error';
+    // Check if it's a paused project (Supabase returns 503 or CORS error when paused)
+    const isPaused=msg.includes('503')||msg.includes('Failed to fetch')||msg.includes('NetworkError')||msg.includes('CORS');
+    ls.innerHTML=`
+      <div style="text-align:center;padding:2rem;max-width:480px;margin:0 auto;">
+        <div style="font-size:32px;margin-bottom:12px;">⚠️</div>
+        <div style="font-size:16px;font-weight:600;color:#A32D2D;margin-bottom:8px;">
+          ${isPaused?'Supabase project may be paused':'Database connection failed'}
+        </div>
+        <div style="font-size:13px;color:#6b6b67;line-height:1.7;margin-bottom:16px;">
+          ${isPaused
+            ?'Free Supabase projects pause after 1 week of inactivity.<br><strong>Fix:</strong> Go to <a href="https://supabase.com/dashboard" target="_blank" style="color:#185FA5;">supabase.com/dashboard</a>, open your project, and click <strong>Restore project</strong>. Then come back and retry.'
+            :'Error: '+msg.slice(0,200)
+          }
+        </div>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+          <button onclick="location.reload()" style="padding:8px 20px;border-radius:8px;border:0.5px solid #bbb;background:#1a1a18;color:#fff;font-size:13px;cursor:pointer;">↺ Retry</button>
+          <a href="https://supabase.com/dashboard" target="_blank" style="padding:8px 20px;border-radius:8px;border:0.5px solid #185FA5;background:#E6F1FB;color:#0C447C;font-size:13px;cursor:pointer;text-decoration:none;">Open Supabase →</a>
+        </div>
+        <div style="margin-top:16px;font-size:11px;color:#9c9c97;background:#f5f5f3;padding:8px 12px;border-radius:6px;text-align:left;">
+          <strong>Debug info:</strong> ${msg.slice(0,300)}
+        </div>
+      </div>`;
+    return;
+  }
   document.getElementById('loading-screen').style.display='none';
   // Restore saved session
   const saved=localStorage.getItem('at_session');
@@ -870,6 +972,8 @@ function render(){
   fillFilterDDs();
   const addBtn=document.getElementById('btn-add-task');
   if(addBtn)addBtn.style.display=perm('canAdd')?'':'none';
+  const uploadBtn=document.getElementById('btn-upload-csv');
+  if(uploadBtn)uploadBtn.style.display=perm('canAdd')?'':'none';
   const f=getFiltered().sort((a,b)=>{
     let av=a[sortCol]||'',bv=b[sortCol]||'';
     if(sortCol==='rating'){av=+av||0;bv=+bv||0;return(av-bv)*sortDir;}
@@ -1035,14 +1139,19 @@ async function saveTask(){
   try{
     let result;
     if(editId){
-      result=await sb.from('tasks').update(rec).eq('id',editId).select();
+      const url=SUPABASE_URL+'/rest/v1/tasks?id=eq.'+editId;
+      const r=await fetch(url,{method:'PATCH',headers:SB_HEADERS,body:JSON.stringify(rec)});
+      const d=await r.json();
+      result={data:d,error:r.ok?null:d};
     } else {
-      result=await sb.from('tasks').insert([rec]).select();
+      const url=SUPABASE_URL+'/rest/v1/tasks';
+      const r=await fetch(url,{method:'POST',headers:SB_HEADERS,body:JSON.stringify([rec])});
+      const d=await r.json();
+      result={data:d,error:r.ok?null:d};
     }
-    if(result.error)throw result.error;
+    if(result.error)throw new Error(JSON.stringify(result.error));
     // Refresh tasks
-    const tr=await sb.from('tasks').select('*').order('created_at',{ascending:false});
-    if(tr.data)tasks=tr.data;
+    tasks=await sbFetch('tasks?order=created_at.desc');
     closeModal();
     render();
     showToast(editId?'Task updated!':'Task added! Notifying assignees…');
@@ -1058,7 +1167,9 @@ async function delTask(id){
   const t=tasks.find(x=>x.id===id);
   if(!confirm(`Delete: "${t.task}"?`))return;
   showSaving();
-  const{error}=await sb.from('tasks').delete().eq('id',id);
+  const _delUrl=SUPABASE_URL+'/rest/v1/tasks?id=eq.'+id;
+  const _delR=await fetch(_delUrl,{method:'DELETE',headers:{...SB_HEADERS,'Prefer':''}});
+  const error=_delR.ok?null:{message:'Delete failed'};
   if(error){showToast('Error deleting task',true);return;}
   tasks=tasks.filter(x=>x.id!==id);
   render();
@@ -1348,7 +1459,9 @@ async function editUserEmail(name){
   const newEmail=prompt(`Enter email address for ${name}:`, current);
   if(newEmail===null) return; // cancelled
   showSaving();
-  const{error}=await sb.from('app_users').update({email:newEmail||null}).eq('name',name);
+  const _euUrl=SUPABASE_URL+'/rest/v1/app_users?name=eq.'+encodeURIComponent(name);
+  const _euR=await fetch(_euUrl,{method:'PATCH',headers:SB_HEADERS,body:JSON.stringify({email:newEmail||null})});
+  const error=_euR.ok?null:{message:'Update failed'};
   if(error){showToast('Error updating email',true);return;}
   if(u)u.email=newEmail||null;
   renderAdmin();
@@ -1402,7 +1515,10 @@ async function addCustomField(){
   const field_id='cf_'+Date.now();
   const rec={field_id,label,type,required:req,options:type==='select'?optStr.split(',').map(o=>o.trim()).filter(Boolean):[]};
   showSaving();
-  const{data,error}=await sb.from('custom_fields').insert([rec]).select();
+  const _cfUrl=SUPABASE_URL+'/rest/v1/custom_fields';
+  const _cfR=await fetch(_cfUrl,{method:'POST',headers:SB_HEADERS,body:JSON.stringify([rec])});
+  const _cfD=await _cfR.json();
+  const{data,error}={data:_cfD,error:_cfR.ok?null:_cfD};
   if(error){showToast('Error adding field: '+error.message,true);return;}
   customFields.push(data[0]);
   document.getElementById('new-field-label').value='';
@@ -1413,7 +1529,9 @@ async function addCustomField(){
 async function removeCustomField(field_id){
   if(!confirm('Remove this custom field? Data will be lost.'))return;
   showSaving();
-  const{error}=await sb.from('custom_fields').delete().eq('field_id',field_id);
+  const _cfdUrl=SUPABASE_URL+'/rest/v1/custom_fields?field_id=eq.'+field_id;
+  const _cfdR=await fetch(_cfdUrl,{method:'DELETE',headers:{...SB_HEADERS,'Prefer':''}});
+  const error=_cfdR.ok?null:{message:'Delete failed'};
   if(error){showToast('Error removing field',true);return;}
   customFields=customFields.filter(f=>f.field_id!==field_id);
   renderAdmin();render();
@@ -1421,7 +1539,9 @@ async function removeCustomField(field_id){
 }
 async function changeUserRole(name,role){
   showSaving();
-  const{error}=await sb.from('app_users').update({role}).eq('name',name);
+  const _ruUrl=SUPABASE_URL+'/rest/v1/app_users?name=eq.'+encodeURIComponent(name);
+  const _ruR=await fetch(_ruUrl,{method:'PATCH',headers:SB_HEADERS,body:JSON.stringify({role})});
+  const error=_ruR.ok?null:{message:'Update failed'};
   if(error){showToast('Error updating role',true);return;}
   const u=users.find(x=>x.name===name);if(u)u.role=role;
   renderAdmin();showToast(`${name} is now ${role}.`);
@@ -1430,7 +1550,9 @@ async function removeUser(name){
   if(name===currentUser.name){alert('You cannot remove yourself.');return;}
   if(!confirm(`Remove user "${name}"?`))return;
   showSaving();
-  const{error}=await sb.from('app_users').delete().eq('name',name);
+  const _udUrl=SUPABASE_URL+'/rest/v1/app_users?name=eq.'+encodeURIComponent(name);
+  const _udR=await fetch(_udUrl,{method:'DELETE',headers:{...SB_HEADERS,'Prefer':''}});
+  const error=_udR.ok?null:{message:'Delete failed'};
   if(error){showToast('Error removing user',true);return;}
   users=users.filter(u=>u.name!==name);
   renderAdmin();initLoginUI();
@@ -1444,7 +1566,10 @@ async function addUser(){
   if(users.find(u=>u.name===name)){alert('A user with this name already exists.');return;}
   showSaving();
   const email=document.getElementById('nu-email').value.trim();
-  const{data,error}=await sb.from('app_users').insert([{name,role,pass,email:email||null}]).select();
+  const _uiUrl=SUPABASE_URL+'/rest/v1/app_users';
+  const _uiR=await fetch(_uiUrl,{method:'POST',headers:SB_HEADERS,body:JSON.stringify([{name,role,pass,email:email||null}])});
+  const _uiD=await _uiR.json();
+  const{data,error}={data:_uiD,error:_uiR.ok?null:_uiD};
   if(error){showToast('Error adding user: '+error.message,true);return;}
   users.push(data[0]);
   document.getElementById('nu-name').value='';
@@ -1456,17 +1581,18 @@ async function addUser(){
 async function togglePerm(role,key,val){
   permissions[role][key]=val;
   showSaving();
-  await sb.from('settings').upsert({key:'permissions',value:permissions});
+  await fetch(SUPABASE_URL+'/rest/v1/settings',{method:'POST',
+    headers:{...SB_HEADERS,'Prefer':'resolution=merge-duplicates'},
+    body:JSON.stringify([{key:'permissions',value:permissions}])});
   showToast('Permissions saved.');
 }
 async function saveOwnerAssigneeLists(){
   taskOwners=document.getElementById('owner-list').value.split('\n').map(s=>s.trim()).filter(Boolean);
   assignees=document.getElementById('assignee-list').value.split('\n').map(s=>s.trim()).filter(Boolean);
   showSaving();
-  await sb.from('settings').upsert([
-    {key:'task_owners',value:taskOwners},
-    {key:'assignees',value:assignees},
-  ]);
+  await fetch(SUPABASE_URL+'/rest/v1/settings',{method:'POST',
+    headers:{...SB_HEADERS,'Prefer':'resolution=merge-duplicates'},
+    body:JSON.stringify([{key:'task_owners',value:taskOwners},{key:'assignees',value:assignees}])});
   const saved=document.getElementById('oal-saved');
   saved.style.display='block';setTimeout(()=>saved.style.display='none',2500);
   showToast('Saved to database!');
@@ -1499,8 +1625,209 @@ function exportCSV(type){
   a.click();
 }
 
+/* ═══════════════════════════════════════
+   CSV IMPORT
+═══════════════════════════════════════ */
+const CSV_HEADERS=['Date','Task','Source','BU / Geography','Priority','Task Owner','Task Assignee 1','Task Assignee 2','Client / Internal','Category','Est. Workload','Submission Date','Status','Work Rating','Remarks','Doc Link'];
+const CSV_FIELD_MAP={
+  'Date':'date','Task':'task','Source':'source','BU / Geography':'bu',
+  'Priority':'priority','Task Owner':'owner','Task Assignee 1':'a1',
+  'Task Assignee 2':'a2','Client / Internal':'client','Category':'category',
+  'Est. Workload':'workload','Submission Date':'submission','Status':'status',
+  'Work Rating':'rating','Remarks':'remarks','Doc Link':'doc'
+};
+
+let parsedCSVRows=[];
+
+function openUploadModal(){
+  parsedCSVRows=[];
+  document.getElementById('csv-file-input').value='';
+  document.getElementById('upload-preview-area').style.display='none';
+  document.getElementById('upload-confirm-btn').style.display='none';
+  document.getElementById('upload-zone').classList.remove('drag');
+  document.getElementById('upload-modal').classList.add('open');
+}
+function closeUploadModal(){document.getElementById('upload-modal').classList.remove('open');}
+function closeUploadOnBg(e){if(e.target===document.getElementById('upload-modal'))closeUploadModal();}
+
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag');
+  const file=e.dataTransfer.files[0];
+  if(file&&file.name.endsWith('.csv'))processCSVFile(file);
+  else showToast('Please drop a .csv file',true);
+}
+function handleFileSelect(e){
+  const file=e.target.files[0];
+  if(file)processCSVFile(file);
+}
+
+function parseCSV(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  if(!lines.length)return{headers:[],rows:[]};
+  // Parse header
+  const headers=parseCSVLine(lines[0]);
+  const rows=[];
+  for(let i=1;i<lines.length;i++){
+    if(!lines[i].trim())continue;
+    const vals=parseCSVLine(lines[i]);
+    const row={};
+    headers.forEach((h,idx)=>row[h]=(vals[idx]||'').trim());
+    rows.push(row);
+  }
+  return{headers,rows};
+}
+
+function parseCSVLine(line){
+  const result=[];let cur='';let inQuote=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='"'){
+      if(inQuote&&line[i+1]==='"'){cur+='"';i++;}
+      else inQuote=!inQuote;
+    } else if(ch===','&&!inQuote){result.push(cur);cur='';}
+    else cur+=ch;
+  }
+  result.push(cur);
+  return result;
+}
+
+function processCSVFile(file){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const text=e.target.result;
+    const{headers,rows}=parseCSV(text);
+
+    // Validate headers
+    const missing=CSV_HEADERS.filter(h=>!headers.includes(h)&&h!=='Doc Link'&&h!=='Work Rating'&&h!=='Remarks');
+    const errEl=document.getElementById('upload-errors');
+
+    // Map rows to task records
+    parsedCSVRows=rows.map((row,i)=>{
+      const rec={custom_data:{}};
+      const rowErrors=[];
+      CSV_HEADERS.forEach(h=>{
+        const field=CSV_FIELD_MAP[h];
+        if(field)rec[field]=(row[h]||'').trim();
+      });
+      // Validate required fields
+      if(!rec.task)rowErrors.push('Task is required');
+      if(!rec.date)rowErrors.push('Date is required');
+      // Validate priority
+      if(rec.priority&&!['High','Medium','Low'].includes(rec.priority))
+        rowErrors.push(`Invalid priority: "${rec.priority}"`);
+      // Validate status
+      if(rec.status&&!['To do','In progress','Review','Done','Blocked'].includes(rec.status))
+        rowErrors.push(`Invalid status: "${rec.status}"`);
+      rec._rowIndex=i+2; // CSV row number (1-indexed + header)
+      rec._errors=rowErrors;
+      rec._valid=rowErrors.length===0;
+      return rec;
+    });
+
+    const validCount=parsedCSVRows.filter(r=>r._valid).length;
+    const errorCount=parsedCSVRows.filter(r=>!r._valid).length;
+
+    // Show stats
+    document.getElementById('upload-stats').innerHTML=`
+      <div class="upload-stat"><span class="us-num">${parsedCSVRows.length}</span> <span class="us-lbl">rows found</span></div>
+      <div class="upload-stat"><span class="us-num" style="color:#1D9E75">${validCount}</span> <span class="us-lbl">ready to import</span></div>
+      ${errorCount?`<div class="upload-stat"><span class="us-num" style="color:#E24B4A">${errorCount}</span> <span class="us-lbl">rows with errors</span></div>`:''}`;
+
+    // Show preview table (first 10 rows)
+    const preview=parsedCSVRows.slice(0,10);
+    const previewHTML=`<table>
+      <thead><tr>
+        <th>Row</th><th>Date</th><th>Task</th><th>Owner</th><th>Priority</th>
+        <th>Status</th><th>Category</th><th>Workload</th><th>Validation</th>
+      </tr></thead>
+      <tbody>${preview.map(r=>`<tr class="${r._valid?'':'upload-err-row'}">
+        <td>${r._rowIndex}</td>
+        <td style="white-space:nowrap">${r.date||'—'}</td>
+        <td style="max-width:180px;white-space:normal">${r.task||'—'}</td>
+        <td>${r.owner||'—'}</td>
+        <td>${r.priority||'—'}</td>
+        <td>${r.status||'—'}</td>
+        <td>${r.category||'—'}</td>
+        <td>${r.workload||'—'}</td>
+        <td>${r._valid?'<span style="color:#1D9E75">✓ OK</span>':'<span style="color:#E24B4A">✗ '+r._errors.join(', ')+'</span>'}</td>
+      </tr>`).join('')}
+      ${parsedCSVRows.length>10?`<tr><td colspan="9" style="text-align:center;padding:8px;color:var(--tx3);font-style:italic;">...and ${parsedCSVRows.length-10} more rows</td></tr>`:''}
+      </tbody></table>`;
+
+    document.getElementById('upload-preview').innerHTML=previewHTML;
+    document.getElementById('upload-preview-area').style.display='block';
+
+    if(errorCount>0){
+      const allErrors=parsedCSVRows.filter(r=>!r._valid).map(r=>`Row ${r._rowIndex}: ${r._errors.join(', ')}`);
+      errEl.innerHTML='⚠ Errors found (these rows will be skipped):<br>'+allErrors.join('<br>');
+      errEl.style.display='block';
+    } else {
+      errEl.style.display='none';
+    }
+
+    if(validCount>0){
+      document.getElementById('upload-confirm-btn').style.display='';
+      document.getElementById('upload-confirm-btn').textContent=`Import ${validCount} task${validCount!==1?'s':''}`;
+    } else {
+      document.getElementById('upload-confirm-btn').style.display='none';
+    }
+  };
+  reader.readAsText(file);
+}
+
+async function confirmImport(){
+  const validRows=parsedCSVRows.filter(r=>r._valid).map(r=>{
+    const rec={};
+    ['date','task','source','bu','priority','owner','a1','a2','client','category','workload','submission','status','rating','remarks','doc'].forEach(f=>{
+      rec[f]=r[f]||null;
+    });
+    rec.custom_data={};
+    return rec;
+  });
+  if(!validRows.length){showToast('No valid rows to import',true);return;}
+  showSaving();
+  document.getElementById('upload-confirm-btn').textContent='Importing…';
+  document.getElementById('upload-confirm-btn').disabled=true;
+  try{
+    const _impR=await fetch(SUPABASE_URL+'/rest/v1/tasks',{method:'POST',headers:SB_HEADERS,body:JSON.stringify(validRows)});
+    if(!_impR.ok){const _impD=await _impR.json();throw new Error(JSON.stringify(_impD));}
+    // Refresh tasks
+    tasks=await sbFetch('tasks?order=created_at.desc');
+    closeUploadModal();
+    render();
+    showToast(`✓ ${validRows.length} task${validRows.length!==1?'s':''} imported successfully!`);
+  }catch(e){
+    showToast('Import failed: '+e.message,true);
+    document.getElementById('upload-confirm-btn').textContent=`Import ${validRows.length} tasks`;
+    document.getElementById('upload-confirm-btn').disabled=false;
+  }
+}
+
+function downloadDummyCSV(){
+  const rows=[
+    CSV_HEADERS,
+    ['2026-04-07','Prepare APAC proposal','Email','APAC','High','Amal','Vivek','Edwin','Client','Proposal','2d','2026-04-10','In progress','','Follow up with client after submission',''],
+    ['2026-04-07','Q2 capability deck update','Slack','India GCC','Medium','Sreejith','Abhilash','','Internal','Capability Deck','1d','2026-04-09','To do','','Include new service offerings',''],
+    ['2026-04-08','RFP response for Europe deal','Email','Europe','High','Amal','Naseef','Aishwariya','Client','RFP','3d','2026-04-14','In progress','','Coordinate with legal team','https://docs.google.com/'],
+    ['2026-04-08','SOW review for Middle East client','Meeting','Middle East','High','Sreejith','Vishnu','','Client','SOW/MSA','1d','2026-04-09','Review','4','Awaiting client sign-off',''],
+    ['2026-04-08','New inbound lead follow-up','Inbound','USA','Medium','Amal','Edwin','','Client','Inbound Lead','0.5d','2026-04-08','Done','5','Responded within SLA',''],
+    ['2026-04-09','Invoice for March services','Email','India GCC','Low','Sreejith','Aggie','','Internal','Invoicing','0.5d','2026-04-09','Done','5','All invoices sent',''],
+    ['2026-04-09','Pitch deck for USA enterprise client','Slack','USA','High','Amal','Haritha','Vivek','Client','Pitch Deck','2d','2026-04-11','In progress','','Need design review',''],
+    ['2026-04-10','Internal team process update','Meeting','India GCC','Low','Sreejith','Abhilash','Aggie','Internal','Others','1d','2026-04-10','To do','','Quarterly process review',''],
+    ['2026-04-10','APAC client onboarding proposal','Email','APAC','High','Amal','Naseef','','Client','Proposal','2d','2026-04-14','To do','','New enterprise account',''],
+    ['2026-04-11','GCC capability presentation','Slack','Middle East','Medium','Sreejith','Vishnu','Edwin','Client','Capability Deck','1.5d','2026-04-12','To do','','Virtual presentation scheduled',''],
+  ];
+  const csv=rows.map(r=>r.map(v=>`"${(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='activity_tracker_template.csv';
+  a.click();
+  showToast('Dummy CSV downloaded!');
+}
+
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){closeModal();closePwdModal();}
+  if(e.key==='Escape'){closeModal();closePwdModal();closeUploadModal();}
 });
 
 /* ═══════════════════════════════════════
@@ -1749,7 +2076,9 @@ async function submitPwdChange(){
   }
 
   showSaving();
-  const{error}=await sb.from('app_users').update({pass:newPwd}).eq('name',currentUser.name);
+  const _pwUrl=SUPABASE_URL+'/rest/v1/app_users?name=eq.'+encodeURIComponent(currentUser.name);
+  const _pwR=await fetch(_pwUrl,{method:'PATCH',headers:SB_HEADERS,body:JSON.stringify({pass:newPwd})});
+  const error=_pwR.ok?null:{message:'Update failed'};
   if(error){errEl.textContent='Error updating password: '+error.message;errEl.style.display='block';return;}
 
   // Update local state
